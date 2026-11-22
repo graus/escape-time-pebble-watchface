@@ -15,6 +15,11 @@ colors each point by how many steps it takes to escape.
   palette flows through it, so animating costs almost nothing. The digits'
   outline moves with it.
 
+An hour on the watch, one frame per minute (16:00-16:59, the dive into the
+Northwest star; every frame is the watch's own rendering):
+
+![An hour's dive, one frame per minute](docs/timelapse.gif)
+
 | basalt | emery | gabbro | diorite |
 |---|---|---|---|
 | ![basalt](docs/screenshots/basalt.png) | ![emery](docs/screenshots/emery.png) | ![gabbro](docs/screenshots/gabbro.png) | ![diorite](docs/screenshots/diorite.png) |
@@ -73,6 +78,8 @@ The layout and Quick View handling come from
     pebble build
     make -C tools/host test           # the engine on the host
     python3 tools/preview.py          # faces at any time, into preview/
+    python3 tools/build_store_assets.py  # store timelapses, stills, icons, banner
+    store/publish.sh                  # publish to the Pebble app store (goes live)
 
 `tools/design.py` holds the palette, B&W levels, stroke weights and
 targets; `tools/glyphs.py` the digit shapes. `tools/preview.py`

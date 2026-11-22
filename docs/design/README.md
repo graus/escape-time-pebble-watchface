@@ -1,3 +1,8 @@
+> **Historical.** This is the brief for the design pass, written against the
+> first version. Its outcome is in commits 1db3984 (color: digits drawn from
+> the set, with a moving tide) and 950c100 (B&W: the same face, dithered);
+> the README describes the face as it is now.
+
 # Escape Time: design brief
 
 A Pebble watch face. The time is four large digits (HH over MM), and each
