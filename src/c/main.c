@@ -77,10 +77,9 @@ static void init_colors(void) {
 }
 
 // Settings, kept on the watch so the face needs the phone only to change
-// them. PERSIST_KEY_DARK held the first build's dark mode on/off.
+// them. (Key 1 is unused: a pre-release build's.)
 enum {
-  PERSIST_KEY_DARK = 1,
-  PERSIST_KEY_MODE,
+  PERSIST_KEY_MODE = 2,
   PERSIST_KEY_NIGHT,
   PERSIST_KEY_NIGHT_START,
   PERSIST_KEY_NIGHT_END,
@@ -388,15 +387,13 @@ static void unobstructed_did_change(void *context) {
 // ---------------------------------------------------------------------------
 // Settings
 
-// A setting's value as a number, whatever integer type the phone sent.
+// A setting's value, whatever integer width the phone sent.
 static int32_t tuple_int(const Tuple *t) {
   switch (t->type) {
     case TUPLE_INT:
       return t->length == 1 ? t->value->int8 : t->length == 2 ? t->value->int16 : t->value->int32;
     case TUPLE_UINT:
       return t->length == 1 ? t->value->uint8 : t->length == 2 ? t->value->uint16 : (int32_t)t->value->uint32;
-    case TUPLE_CSTRING:
-      return atoi(t->value->cstring);
     default:
       return 0;
   }
@@ -437,8 +434,6 @@ static void load_settings(void) {
   if (persist_exists(PERSIST_KEY_MODE)) {
     int32_t mode = persist_read_int(PERSIST_KEY_MODE);
     s_mode = mode >= 0 && mode < FACE_MODES ? (uint8_t)mode : FACE_MODE_LIGHT;
-  } else if (persist_exists(PERSIST_KEY_DARK) && persist_read_bool(PERSIST_KEY_DARK)) {
-    s_mode = FACE_MODE_DARK;
   }
   s_night = persist_exists(PERSIST_KEY_NIGHT) && persist_read_bool(PERSIST_KEY_NIGHT);
   if (persist_exists(PERSIST_KEY_NIGHT_START)) {

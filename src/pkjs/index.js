@@ -17,15 +17,12 @@ function load() {
   } catch (e) {
     saved = {};
   }
-  if (!('Mode' in saved) && saved.DarkMode) {
-    saved.Mode = 1;  // the first build's on/off dark mode
-  }
   var settings = {};
   for (var key in DEFAULTS) {
     settings[key] = key in saved ? saved[key] : DEFAULTS[key];
   }
   if (!MODES[settings.Mode]) {
-    settings.Mode = DEFAULTS.Mode;  // a look this version no longer has
+    settings.Mode = DEFAULTS.Mode;  // not a look this version has
   }
   return settings;
 }
