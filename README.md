@@ -12,8 +12,13 @@ colors each point by how many steps it takes to escape.
 - **The minute sets how deep:** at :00 the whole set, then 1.2x deeper every
   minute, to about 47,000x at :59.
 - **It moves by color cycling:** the view is computed once a minute and the
-  palette flows through it, so animating costs almost nothing. The digits'
-  outline moves with it.
+  palette flows through it. The digits' outline moves with it.
+- **It holds still to spare the battery:** frames run only while a new
+  minute's view is computed (it sharpens in, then stops) and for 30 seconds
+  after a tap: a flick of the wrist, or a touch on Pebble Time 2 and Round 2.
+  While still, nothing runs but the minute tick. Painting a frame takes
+  11.4 ms on a real watch, so animating nonstop at 5 fps would keep the CPU
+  busy about 6% of the time, plus the display updates.
 
 An hour on the watch, one frame per minute (16:00-16:59, the dive into the
 Northwest star; every frame is the watch's own rendering):

@@ -5,6 +5,12 @@
 // that count as points in the set, so the bands flow out of them; their
 // weight follows the depth of the dive and swells with the moving palette
 // (face.h). B&W watches show the same face, dithered.
+//
+// To save the battery the face is still most of the time: frames run only
+// while a new minute's view is being computed (it sharpens in, then stops)
+// and for AWAKE_MS after a tap (a flick of the wrist, or a touch on Pebble
+// Time 2 and Round 2), when the colors flow. While still, nothing runs but
+// the minute tick.
 
 #include <pebble.h>
 
@@ -19,6 +25,8 @@
 // Longest a frame may spend computing the new view, so the face stays
 // responsive (the rest waits for the next frame).
 #define COMPUTE_BUDGET_MS 40
+// How long the colors flow after a tap (and after the face starts).
+#define AWAKE_MS 30000
 
 static const uint32_t s_glyph_resources[2][10] = {
   [DigitSetLarge] = {
@@ -73,10 +81,16 @@ static Grid *s_grid;
 static int s_hour = -1, s_minute = -1;  // the view being shown (none yet)
 
 static AppTimer *s_frame_timer;
+static AppTimer *s_awake_timer;
 static bool s_focused = true;
+static bool s_awake;  // the colors flow: for AWAKE_MS after a tap
 static uint8_t s_phase;
 
 static uint32_t s_compute_start;
+
+// Log the average cost of painting a frame once, after this many frames.
+#define PROFILE_FRAMES 50
+static uint32_t s_profile_frames, s_profile_ms;
 
 static uint32_t now_ms(void) {
   time_t s;
@@ -88,6 +102,8 @@ static uint32_t now_ms(void) {
 // ---------------------------------------------------------------------------
 // The fractal
 
+static void update_running(void);
+
 static void start_view(void) {
   if (!s_grid || s_hour < 0) {
     return;  // no grid, or the time is not known yet
@@ -96,6 +112,7 @@ static void start_view(void) {
   dive_view(&view, s_hour, s_minute, s_grid->w, s_grid->h);
   grid_start(s_grid, &view);
   s_compute_start = now_ms();
+  update_running();  // frames compute the view, even on a still face
 }
 
 // The dive covers the screen in packed cells (depth for the digits' weight,
@@ -219,33 +236,91 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   // Every pixel is shaded, so nothing needs clearing first.
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   if (fb) {
+    uint32_t start = now_ms();
     face_frame(&s_frame, &s_styles[s_digit_set], &s_colors, s_phase);
     paint_face(fb, &s_frame, s_grid ? s_grid : &s_flat_grid, s_dist);
     graphics_release_frame_buffer(ctx, fb);
+    if (s_profile_frames < PROFILE_FRAMES) {
+      s_profile_ms += now_ms() - start;
+      if (++s_profile_frames == PROFILE_FRAMES) {
+        APP_LOG(APP_LOG_LEVEL_INFO, "paint: %d.%02d ms per frame",
+                (int)(s_profile_ms / PROFILE_FRAMES), (int)(s_profile_ms % PROFILE_FRAMES * 100 / PROFILE_FRAMES));
+      }
+    }
   }
 }
 
 // ---------------------------------------------------------------------------
 // Animation
 
+static bool computing(void) {
+  return s_grid && !grid_done(s_grid);
+}
+
+// Frames run while the face is in front and either awake or still
+// computing the minute's view.
+static bool wants_frames(void) {
+  return s_focused && (s_awake || computing());
+}
+
 static void frame(void *context) {
-  // Schedule first so the frame rate does not drift by the cost of a frame.
-  s_frame_timer = app_timer_register(1000 / FPS, frame, NULL);
+  uint32_t start = now_ms();
   compute();
   // A cell shows palette entry (count + phase): as the phase grows, each
   // color moves to the cells with one iteration less, outward from the set.
   s_phase = (s_phase + 1) % PALETTE_SIZE;
   layer_mark_dirty(s_canvas);
+  // The last frame paints the finished view; after it the face stays still.
+  if (wants_frames()) {
+    uint32_t spent = now_ms() - start;
+    uint32_t period = 1000 / FPS;
+    s_frame_timer = app_timer_register(spent < period ? period - spent : 1, frame, NULL);
+  } else {
+    s_frame_timer = NULL;
+    APP_LOG(APP_LOG_LEVEL_INFO, "still");
+  }
 }
 
 static void update_running(void) {
-  if (s_focused && !s_frame_timer) {
+  if (wants_frames() && !s_frame_timer) {
     s_frame_timer = app_timer_register(1000 / FPS, frame, NULL);
   } else if (!s_focused && s_frame_timer) {
     app_timer_cancel(s_frame_timer);
     s_frame_timer = NULL;
   }
 }
+
+static void awake_timeout(void *context) {
+  s_awake_timer = NULL;
+  s_awake = false;  // the running frame stops itself once the view is done
+}
+
+// Sets the colors flowing for AWAKE_MS (again).
+static void wake(void) {
+  s_awake = true;
+  if (s_awake_timer) {
+    app_timer_reschedule(s_awake_timer, AWAKE_MS);
+  } else {
+    s_awake_timer = app_timer_register(AWAKE_MS, awake_timeout, NULL);
+  }
+  update_running();
+}
+
+// The accelerometer's tap: a sharp flick of the wrist or a knock on the
+// watch. The tap service is event driven, so listening costs nothing.
+static void tap_handler(AccelAxisType axis, int32_t direction) {
+  wake();
+}
+
+#if defined(PBL_TOUCH)
+// On a touchscreen (Pebble Time 2, Round 2) a finger on the screen is the
+// natural tap; the accelerometer does not register it.
+static void touch_handler(const TouchEvent *event, void *context) {
+  if (event->type == TouchEvent_Touchdown) {
+    wake();
+  }
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // System events
@@ -313,12 +388,21 @@ static void init(void) {
     .did_change = unobstructed_did_change,
   }, NULL);
 #endif
-  update_running();
+  accel_tap_service_subscribe(tap_handler);
+#if defined(PBL_TOUCH)
+  touch_service_subscribe(touch_handler, NULL);
+#endif
+  wake();  // the colors flow for a while when the face appears
   APP_LOG(APP_LOG_LEVEL_INFO, "started, heap free %d", (int)heap_bytes_free());
 }
 
 static void deinit(void) {
   if (s_frame_timer) app_timer_cancel(s_frame_timer);
+  if (s_awake_timer) app_timer_cancel(s_awake_timer);
+  accel_tap_service_unsubscribe();
+#if defined(PBL_TOUCH)
+  touch_service_unsubscribe();
+#endif
   tick_timer_service_unsubscribe();
   app_focus_service_unsubscribe();
   window_destroy(s_window);
