@@ -1,0 +1,7 @@
+build/
+.lock-waf*
+__pycache__/
+tools/host/test_mandel
+tools/host/librender.*
+/preview/
+*.dSYM/
