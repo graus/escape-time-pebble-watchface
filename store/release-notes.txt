@@ -1,1 +1,1 @@
-First release: an hour-long dive into the Mandelbrot set, one zoom step every minute, with the digits drawn from the set itself. On every Pebble, color and black-and-white.
+Dark mode: black digits outlined in white over deep blues, purples and embers, all the time or only between night hours you choose. Find it in the face's settings in the Pebble app. On every Pebble, color and black-and-white.
