@@ -12,7 +12,7 @@
     "uuid": "77052f83-b510-45b4-b661-bdcc8179112b",
     "sdkVersion": "3",
     "projectType": "native",
-    "enableMultiJS": false,
+    "enableMultiJS": true,
     "targetPlatforms": [
       "aplite",
       "basalt",
@@ -25,7 +25,15 @@
     "watchapp": {
       "watchface": true
     },
-    "messageKeys": [],
+    "capabilities": [
+      "configurable"
+    ],
+    "messageKeys": [
+      "Mode",
+      "NightDark",
+      "NightStart",
+      "NightEnd"
+    ],
     "resources": {
       "media": [
         {
