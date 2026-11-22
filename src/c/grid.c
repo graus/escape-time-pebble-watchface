@@ -10,7 +10,7 @@
 
 Grid *grid_create(uint16_t w, uint16_t h, uint8_t shift, uint8_t modulo,
                   GridEncoding encoding) {
-  if (encoding.packed && modulo > GRID_BAND_LACE) {
+  if (modulo > GRID_BAND_LACE) {
     return NULL;  // the bands would collide with lace and inside
   }
   Grid *grid = malloc(sizeof(Grid));
@@ -28,8 +28,7 @@ Grid *grid_create(uint16_t w, uint16_t h, uint8_t shift, uint8_t modulo,
     free(grid);
     return NULL;
   }
-  memset(grid->cells, encoding.packed ? GRID_PACKED_INSIDE : GRID_INSIDE,
-         (size_t)grid->w * grid->h);
+  memset(grid->cells, GRID_PACKED_INSIDE, (size_t)grid->w * grid->h);
   memset(&grid->view, 0, sizeof(grid->view));
   grid->depth_low = grid->depth_high = 0;
   grid->next = grid->h;  // nothing to compute until a view is set
@@ -84,9 +83,7 @@ static void find_depth_range(Grid *grid) {
 
 void grid_start(Grid *grid, const MandelView *view) {
   grid->view = *view;
-  if (grid->encoding.packed) {
-    find_depth_range(grid);
-  }
+  find_depth_range(grid);
   grid->next = 0;
 }
 
@@ -142,11 +139,7 @@ bool grid_step(Grid *grid) {
   uint16_t left = 0;
   for (uint16_t x = 0; x < grid->w; x++) {
     uint16_t count = escape(grid, x, y);
-    if (grid->encoding.packed) {
-      row[x] = pack(grid, count, left, x > 0);
-    } else {
-      row[x] = count == MANDEL_INSIDE ? GRID_INSIDE : (uint8_t)(count % grid->modulo);
-    }
+    row[x] = pack(grid, count, left, x > 0);
     left = count;
   }
   grid->next++;

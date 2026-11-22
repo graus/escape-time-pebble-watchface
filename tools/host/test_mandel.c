@@ -85,8 +85,8 @@ static void test_dive(void) {
 // Every row is computed exactly once, whatever the height.
 static void test_interlace(void) {
   for (int h = 1; h <= 40; h++) {
-    Grid *g = grid_create(8, h, 0, 24, (GridEncoding){.packed = false});
-    MandelView v = {MANDEL_FIX(3.0), 0, 1, 1};  // far outside: escapes at once
+    Grid *g = grid_create(8, h, 0, 24, (GridEncoding){6, 25, 97});
+    MandelView v = {MANDEL_FIX(3.0), 0, 1, 1};  // far outside: escapes at once, cell 0
     memset(g->cells, 0xAA, (size_t)g->w * g->h);
     grid_start(g, &v);
     int steps = 0;
@@ -104,7 +104,7 @@ static void test_interlace(void) {
 }
 
 static const GridEncoding PACKED = {
-  .packed = true, .lace_step = 6, .low_percent = 25, .high_percent = 97,
+  .lace_step = 6, .low_percent = 25, .high_percent = 97,
 };
 
 static Grid *computed(int hour, int minute, int w, int h, uint8_t modulo) {

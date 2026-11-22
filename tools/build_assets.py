@@ -1,112 +1,52 @@
 #!/usr/bin/env python3
-"""Generate Escape Time's digit bitmaps, layout metrics, palette, dive targets
-and menu icon.
+"""Generate Escape Time's digits, palette, dive targets and menu icon.
 
-Run from the project root (needs Pillow):
+Run from the project root (needs Pillow, for the icon):
 
     python3 tools/build_assets.py
 
 Outputs:
-  resources/digits/<d>~<tag>.png   large 1-bit digits, white on black, cropped to ink
-                                   (B&W watches)
-  resources/digits/s<d>~<tag>.png  compact digits, used while Timeline Quick View shows
-  src/c/generated/metrics.h        digit height, worst-case pair width and gaps per
-                                   platform, for both sets (DIGIT_L_*, DIGIT_S_*)
-  resources/glyphs/<d>~<tag>.bin   distance fields of the color watches' digits
-  resources/glyphs/s<d>~<tag>.bin  (tools/glyphs.py), large and compact
+  resources/glyphs/<d>~<tag>.bin   the digits' distance fields (tools/glyphs.py):
+  resources/glyphs/s<d>~<tag>.bin  large, and compact for Timeline Quick View
   src/c/generated/glyphs.h         their sizes and stroke weights (GLYPH_L_*, GLYPH_S_*)
-  src/c/generated/palette.h        palette, colors and B&W levels from tools/design.py
+  src/c/generated/palette.h        palette and face colors (color) or dither
+                                   levels (B&W), from tools/design.py
   src/c/generated/targets.h        the dive targets from tools/design.py, in Q4.27
   resources/images/menu_icon.png   25x25 menu icon: the Mandelbrot set
-
-All ten digits of one size share one height and one baseline: they are cropped
-horizontally to their own ink but vertically to the union of all digits' ink,
-so a row of any two digits lines up without per-digit offsets.
 """
 
 import math
 import os
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import design  # noqa: E402
 import glyphs  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FONT = os.path.join(ROOT, "tools", "fonts", "Rubik-Black.ttf")
-DIGIT_DIR = os.path.join(ROOT, "resources", "digits")
 GLYPH_DIR = os.path.join(ROOT, "resources", "glyphs")
 GENERATED = os.path.join(ROOT, "src", "c", "generated")
-METRICS = os.path.join(GENERATED, "metrics.h")
 ICON = os.path.join(ROOT, "resources", "images", "menu_icon.png")
 
-# Two digit sets per screen size:
-#   large:   as big as the screen allows (found below), used normally;
-#   compact: small enough to fit above Timeline Quick View, used while it shows.
-# tag: (display width, display height, round, compact font size, compact
-#       column gap, compact row gap)
+# Screens by resource tag: (width, height, round, the height the compact
+# block must fit in to clear Timeline Quick View).
 PLATFORMS = {
-    "144w": (144, 168, False, 58, 8, 14),
-    "180w": (180, 180, True, 58, 8, 14),
-    "200w": (200, 228, False, 113, 16, 28),
-    "260w": (260, 260, True, 105, 15, 26),
+    "144w": (144, 168, False, 100),  # aplite, basalt, diorite, flint
+    "180w": (180, 180, True, 100),   # chalk
+    "200w": (200, 228, False, 190),  # emery
+    "260w": (260, 260, True, 178),   # gabbro
 }
 
-# Large set: margin to the screen edge (rect) or the circle (round), and gaps
-# as a share of the screen.
+# Margin to the screen edge (rect) or the circle (round).
 MARGIN = 4
-COL_GAP_SHARE = 0.05
-ROW_GAP_SHARE = 0.06
 
 
-def render_digit(font, d, size):
-    """Render one digit into a 1-bit image with generous margins (no anti-aliasing)."""
-    canvas = size * 2
-    img = Image.new("1", (canvas, canvas), 0)
-    draw = ImageDraw.Draw(img)
-    # Mode "1" draws text without anti-aliasing. A fixed origin keeps one baseline.
-    draw.text((size // 2, size // 4), str(d), font=font, fill=1)
-    return img
-
-
-def render_size(size):
-    """The ten digits at one font size, cropped to a shared height."""
-    font = ImageFont.truetype(FONT, size)
-    imgs = [render_digit(font, d, size) for d in range(10)]
-    boxes = [img.getbbox() for img in imgs]
-    top = min(b[1] for b in boxes)
-    bottom = max(b[3] for b in boxes)
-    crops = [img.crop((box[0], top, box[2], bottom)) for img, box in zip(imgs, boxes)]
-    return bottom - top, crops
-
-
-def block(size, col_gap, row_gap):
-    height, crops = render_size(size)
-    widths = [c.width for c in crops]
-    pair = max(a + b for a in widths for b in widths)
-    return height, crops, pair, pair + col_gap, 2 * height + row_gap
-
-
-def fits(screen_w, screen_h, is_round, win_w, win_h):
+def fits(screen_w, screen_h, is_round, block_w, block_h):
     if is_round:
-        return math.hypot(win_w / 2, win_h / 2) <= screen_w / 2 - MARGIN
-    return win_w <= screen_w - 2 * MARGIN and win_h <= screen_h - 2 * MARGIN
-
-
-def largest_size(screen_w, screen_h, is_round, col_gap, row_gap, start):
-    size = start
-    while True:
-        _, _, _, win_w, win_h = block(size + 1, col_gap, row_gap)
-        if not fits(screen_w, screen_h, is_round, win_w, win_h):
-            return size
-        size += 1
-
-
-def save(crops, prefix, tag):
-    for d, crop in enumerate(crops):
-        crop.save(os.path.join(DIGIT_DIR, "%s%d~%s.png" % (prefix, d, tag)), optimize=True)
+        return math.hypot(block_w / 2, block_h / 2) <= screen_w / 2 - MARGIN
+    return block_w <= screen_w - 2 * MARGIN and block_h <= screen_h - 2 * MARGIN
 
 
 def build_icon():
@@ -131,8 +71,14 @@ def build_icon():
 
 
 def build_palette():
-    def argb_list(colors):
-        return "  " + ", ".join("0x%02X" % design.argb8(c) for c in colors) + ","
+    def table(values):
+        return ["static const uint8_t s_palette[PALETTE_SIZE] = {",
+                "  " + ", ".join(values) + ",", "};"]
+
+    def face(values):
+        return ["#define FACE_%s %s" % (name, value)
+                for name, value in zip(("DIGIT", "KEYLINE", "INSIDE", "LACE"), values)]
+
     lines = [
         "// Generated by tools/build_assets.py from tools/design.py. Do not edit.",
         "#pragma once",
@@ -140,27 +86,23 @@ def build_palette():
         "#define FPS %d" % design.FPS,
         "#define PALETTE_SIZE %d" % design.PALETTE_SIZE,
         "",
-        "// GColor8 argb bytes, cyclic.",
-        "static const uint8_t s_palette_argb[PALETTE_SIZE] = {",
-        argb_list(design.PALETTE),
-        "};",
-        "#define COLOR_DIGIT_ARGB 0x%02X" % design.argb8(design.DIGIT),
-        "#define COLOR_KEYLINE_ARGB 0x%02X" % design.argb8(design.KEYLINE),
-        "#define COLOR_INSIDE_ARGB 0x%02X" % design.argb8(design.INSIDE),
-        "#define COLOR_LACE_ARGB 0x%02X" % design.argb8(design.LACE),
-        "",
         "// Escape counts further apart than this between neighbours: lace.",
         "#define LACE_STEP %d" % design.LACE_STEP,
         "// Depth: the view's escape counts ranked between these quantiles (percent).",
         "#define DEPTH_LOW_PERCENT %d" % round(100 * design.DEPTH_LOW),
         "#define DEPTH_HIGH_PERCENT %d" % round(100 * design.DEPTH_HIGH),
         "",
-        "// B&W: lit pixels out of 16 per entry; inside the set is solid white.",
-        "static const uint8_t s_palette_bw[PALETTE_SIZE] = {",
-        "  " + ", ".join(str(v) for v in design.BW_LEVELS) + ",",
-        "};",
-        "",
+        "// The palette (cyclic) and the face's other colors: GColor8 argb bytes on",
+        "// color watches, lit pixels out of 16 on B&W ones.",
+        "#if defined(PBL_COLOR)",
     ]
+    lines += table(["0x%02X" % design.argb8(c) for c in design.PALETTE])
+    lines += face("0x%02X" % design.argb8(c)
+                  for c in (design.DIGIT, design.KEYLINE, design.INSIDE, design.LACE))
+    lines += ["#else"]
+    lines += table([str(v) for v in design.bw_levels()])
+    lines += face(str(v) for v in design.bw_face_levels())
+    lines += ["#endif", ""]
     with open(os.path.join(GENERATED, "palette.h"), "w") as f:
         f.write("\n".join(lines))
 
@@ -182,12 +124,6 @@ def build_targets():
         f.write("\n".join(lines))
 
 
-# Color watches draw their digits from distance fields (tools/glyphs.py).
-# tag: the height the compact block must fit in to clear Timeline Quick View
-# (the Rubik compact block's height).
-GLYPH_PLATFORMS = {"144w": 100, "180w": 100, "200w": 190, "260w": 178}
-
-
 def glyph_block(width):
     """(cell height, gap, block width, block height) for digits `width` px
     wide; the block's size includes a mid-weight stroke's ink outside the
@@ -207,7 +143,7 @@ def largest_glyph(fit):
 
 
 def build_glyphs():
-    """Distance fields and sizes of the color watches' digits."""
+    """The digits' distance fields and sizes, two sets per screen."""
     os.makedirs(GLYPH_DIR, exist_ok=True)
     lines = [
         "// Generated by tools/build_assets.py from tools/glyphs.py and tools/design.py.",
@@ -219,8 +155,7 @@ def build_glyphs():
         "// of its cell. FIT_H is the height the block needs. STYLE: the FaceStyle.",
     ]
     first = True
-    for tag, compact_h in GLYPH_PLATFORMS.items():
-        screen_w, screen_h, is_round = PLATFORMS[tag][:3]
+    for tag, (screen_w, screen_h, is_round, compact_h) in PLATFORMS.items():
         sets = {
             "L": (largest_glyph(lambda w, h: fits(screen_w, screen_h, is_round, w, h)), ""),
             "S": (largest_glyph(lambda w, h: h <= compact_h and
@@ -242,47 +177,14 @@ def build_glyphs():
             lines.append("#define GLYPH_%s_STYLE {%s}"
                          % (name, ", ".join(str(v) for v in design.style(width))))
         first = False
-    lines += ["#endif", ""]
+    lines += ["#else", '#error "No digit metrics for this display width"', "#endif", ""]
     with open(os.path.join(GENERATED, "glyphs.h"), "w") as f:
         f.write("\n".join(lines))
 
 
 def main():
-    os.makedirs(DIGIT_DIR, exist_ok=True)
-    os.makedirs(os.path.dirname(METRICS), exist_ok=True)
+    os.makedirs(GENERATED, exist_ok=True)
     os.makedirs(os.path.dirname(ICON), exist_ok=True)
-
-    lines = [
-        "// Generated by tools/build_assets.py. Do not edit.",
-        "#pragma once",
-        "",
-    ]
-    first = True
-    for tag, (width, height, is_round, small_size, small_col, small_row) in PLATFORMS.items():
-        col_gap = max(6, round(width * COL_GAP_SHARE))
-        row_gap = max(8, round(height * ROW_GAP_SHARE))
-        size = largest_size(width, height, is_round, col_gap, row_gap, small_size)
-        sets = {
-            "L": (size, col_gap, row_gap, ""),
-            "S": (small_size, small_col, small_row, "s"),
-        }
-        lines.append("#%s PBL_DISPLAY_WIDTH == %d" % ("if" if first else "elif", width))
-        for name, (font_size, cg, rg, prefix) in sets.items():
-            digit_h, crops, pair, win_w, win_h = block(font_size, cg, rg)
-            save(crops, prefix, tag)
-            print("%s %s: font %d, digit height %d, max pair %d, window %dx%d"
-                  % (tag, name, font_size, digit_h, pair, win_w, win_h))
-            lines += [
-                "#define DIGIT_%s_HEIGHT %d" % (name, digit_h),
-                "#define DIGIT_%s_MAX_PAIR_WIDTH %d" % (name, pair),
-                "#define DIGIT_%s_COL_GAP %d" % (name, cg),
-                "#define DIGIT_%s_ROW_GAP %d" % (name, rg),
-            ]
-        first = False
-    lines += ["#else", '#error "No digit metrics for this display width"', "#endif", ""]
-    with open(METRICS, "w") as f:
-        f.write("\n".join(lines))
-
     build_icon()
     build_palette()
     build_glyphs()

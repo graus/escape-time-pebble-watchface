@@ -31,10 +31,14 @@ INSIDE = 0x000000
 LACE = 0xFFAA00
 LACE_STEP = 6
 
-# B&W watches keep the digits as windows onto the dive: lit pixels out of 16
-# per palette entry (three levels in a sawtooth, so the bands read as stripes
-# rather than a smooth gray), and solid white inside the set.
-BW_LEVELS = [16, 16, 16, 11, 11, 11, 6, 6, 6] * 2
+# B&W watches show the same face, dithered: each color becomes a density of
+# lit pixels out of 16 in a 4x4 Bayer pattern. Palette entries (and lace)
+# take the lightness they have on the color screen, scaled into
+# BW_MIN_LEVEL..BW_MAX_LEVEL: the bands keep their rhythm, black stays the
+# keyline's and the set's, and solid white stays the digits' (hue tells them
+# apart on color screens; on B&W only lightness can).
+BW_MIN_LEVEL = 1
+BW_MAX_LEVEL = 11
 
 # Digit stroke weights on color watches, as radii in pixels of a digit 50 px
 # wide (scaled with the digit). Each pixel's radius is
@@ -85,6 +89,31 @@ def target(hour):
     return (name, r, -i if hour % 2 else i)
 
 
+def lightness(rgb):
+    """A color's perceived lightness (0..1) on the color screen: its
+    sRGB-encoded relative luminance, so mid-tones come out mid-gray."""
+    import display  # noqa: E402 (tools/ is on the path wherever design is)
+    r, g, b = display.on_screen(((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255))
+    linear = [(v / 255) ** 2.2 for v in (r, g, b)]
+    luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    return luminance ** (1 / 2.2)
+
+
+def bw_level(rgb):
+    """Lit pixels out of 16 for a band's color (palette or lace) on B&W."""
+    return round(BW_MIN_LEVEL + (BW_MAX_LEVEL - BW_MIN_LEVEL) * lightness(rgb))
+
+
+def bw_levels():
+    """B&W level of each palette entry."""
+    return [bw_level(c) for c in PALETTE]
+
+
+def bw_face_levels():
+    """B&W levels of the digit, keyline, inside and lace (as FaceColors)."""
+    return (16, 0, 0, bw_level(LACE))
+
+
 def is_pebble_color(rgb):
     return all(((rgb >> s) & 255) % 85 == 0 for s in (16, 8, 0))
 
@@ -130,4 +159,3 @@ assert all(is_pebble_color(c) for c in PALETTE + [DIGIT, KEYLINE, INSIDE, LACE])
 assert len(set(PALETTE)) == PALETTE_SIZE
 assert all(_one_step(a, b) for a, b in zip(PALETTE, PALETTE[1:] + PALETTE[:1]))
 assert PALETTE_SIZE % 2 == 0, "the tide is a wave over half the palette"
-assert len(BW_LEVELS) == PALETTE_SIZE

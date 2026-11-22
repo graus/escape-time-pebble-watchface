@@ -27,23 +27,23 @@ void render_time(int hour, int minute, int w, int h, MandelView *view, uint16_t 
 // ---------------------------------------------------------------------------
 // Color watches' face
 
-// The packed cells of a time on a w x h screen (1 px cells), as color
-// watches compute them.
-int render_face_grid(int hour, int minute, int w, int h, uint8_t *out) {
+// The packed cells of a time on a w x h screen in cells of 1 << shift px, as
+// the watch computes them. `out` holds the grid's (w >> shift) x (h >> shift)
+// cells, rounded up.
+int render_face_grid(int hour, int minute, int w, int h, int shift, uint8_t *out) {
   const GridEncoding encoding = {
-    .packed = true,
     .lace_step = LACE_STEP,
     .low_percent = DEPTH_LOW_PERCENT,
     .high_percent = DEPTH_HIGH_PERCENT,
   };
-  Grid *grid = grid_create(w, h, 0, PALETTE_SIZE, encoding);
+  Grid *grid = grid_create(w, h, shift, PALETTE_SIZE, encoding);
   if (!grid) return 0;
   MandelView view;
   dive_view(&view, hour, minute, grid->w, grid->h);
   grid_start(grid, &view);
   while (grid_step(grid)) {
   }
-  memcpy(out, grid->cells, (size_t)w * h);
+  memcpy(out, grid->cells, (size_t)grid->w * grid->h);
   grid_destroy(grid);
   return 1;
 }
@@ -61,7 +61,7 @@ int face_code_count(void) {
   return FACE_CODE_LACE + 1;
 }
 
-void render_face(const uint8_t *cells, int w, int h, const DistField *dist,
+void render_face(const uint8_t *cells, int w, int h, int shift, const DistField *dist,
                  const uint8_t style_bytes[6], int phase, uint8_t *out) {
   uint8_t codes[PALETTE_SIZE];
   for (int i = 0; i < PALETTE_SIZE; i++) codes[i] = (uint8_t)i;
@@ -77,7 +77,10 @@ void render_face(const uint8_t *cells, int w, int h, const DistField *dist,
                            style_bytes[3], style_bytes[4], style_bytes[5]};
   static FaceFrame frame;
   face_frame(&frame, &style, &colors, (uint8_t)phase);
+  const int cell = 1 << shift;
+  const int grid_w = (w + cell - 1) >> shift;
   for (int y = 0; y < h; y++) {
-    face_row(&frame, cells + (size_t)y * w, 0, dist, y, 0, w - 1, out + (size_t)y * w);
+    face_row(&frame, cells + (size_t)(y >> shift) * grid_w, (uint8_t)shift, dist, y, 0, w - 1,
+             out + (size_t)y * w);
   }
 }

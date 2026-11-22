@@ -73,4 +73,6 @@
 #define GLYPH_S_ROWS 59
 #define GLYPH_S_FIT_H 177
 #define GLYPH_S_STYLE {7, 20, 11, 6, 30, 6}
+#else
+#error "No digit metrics for this display width"
 #endif

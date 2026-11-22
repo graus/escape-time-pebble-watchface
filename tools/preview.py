@@ -3,12 +3,13 @@
 
     python3 tools/preview.py [out_dir]     (default: preview/)
 
-The fractal and, on color watches, the whole face come from the watch's own
-src/c/mandel.c, dive.c, grid.c and face.c, compiled for the host and called
-through ctypes; the digits are the real resources, laid out as
-src/c/layout.c does; colors come from tools/design.py, as
-src/c/generated/palette.h does. So a preview is the watch face, pixel for
-pixel, at any time of day (the emulator only shows the current time).
+The whole face comes from the watch's own src/c/mandel.c, dive.c, grid.c
+and face.c, compiled for the host and called through ctypes; the digits
+are the real resources, laid out as src/c/layout.c does; colors and B&W
+dither levels come from tools/design.py, as src/c/generated/palette.h does,
+and B&W faces are dithered as src/c/paint.c does. So a preview is the watch
+face, pixel for pixel, at any time of day (the emulator only shows the
+current time).
 
 Every image comes in two versions: exact Pebble colors, and `-screen`, as
 the color display shows them (muted; see tools/display.py). Judge the look
@@ -37,15 +38,16 @@ import display  # noqa: E402
 
 FPS = design.FPS
 
-# name: (width, height, round, color, digit tag)
+# name: (width, height, round, color, resource tag, grid cell shift). The
+# shift is the one main.c ends up with: aplite's heap only fits 2 px cells.
 PLATFORMS = {
-    "aplite": (144, 168, False, False, "144w"),
-    "basalt": (144, 168, False, True, "144w"),
-    "chalk": (180, 180, True, True, "180w"),
-    "diorite": (144, 168, False, False, "144w"),
-    "emery": (200, 228, False, True, "200w"),
-    "flint": (144, 168, False, False, "144w"),
-    "gabbro": (260, 260, True, True, "260w"),
+    "aplite": (144, 168, False, False, "144w", 1),
+    "basalt": (144, 168, False, True, "144w", 0),
+    "chalk": (180, 180, True, True, "180w", 0),
+    "diorite": (144, 168, False, False, "144w", 0),
+    "emery": (200, 228, False, True, "200w", 0),
+    "flint": (144, 168, False, False, "144w", 0),
+    "gabbro": (260, 260, True, True, "260w", 0),
 }
 
 BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
@@ -78,47 +80,9 @@ LIB.dist_create.argtypes = [ctypes.c_uint16, ctypes.c_uint16]
 LIB.dist_destroy.argtypes = [ctypes.c_void_p]
 LIB.dist_merge_row.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
                                ctypes.c_char_p, ctypes.c_int]
-LIB.render_face.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p,
-                            ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p]
-
-
-def metrics(tag_width):
-    text = open(os.path.join(ROOT, "src/c/generated/metrics.h")).read()
-    block = re.search(r"PBL_DISPLAY_WIDTH == %d\n(.*?)#(?:el|endif)" % tag_width, text, re.S).group(1)
-    return {k: int(v) for k, v in re.findall(r"#define DIGIT_(\w+) (\d+)", block)}
-
-
-def digit(d, tag, compact=False):
-    path = os.path.join(ROOT, "resources/digits/%s%d~%s.png" % ("s" if compact else "", d, tag))
-    return Image.open(path).convert("1")
-
-
-def layout(platform, hh, mm):
-    """Digit boxes and the window, as src/c/layout.c (large set, full screen)."""
-    w, h, _, color, tag = PLATFORMS[platform]
-    m = metrics(int(tag[:-1]))
-    imgs = [digit(int(c), tag) for c in "%02d%02d" % (hh, mm)]
-    height, row_gap, col_gap = m["L_HEIGHT"], m["L_ROW_GAP"], m["L_COL_GAP"]
-    spare = h - 2 * height
-    row_gap = min(row_gap, max(spare, 0))
-    block_h = 2 * height + row_gap
-    top = (h - block_h) // 2
-    boxes = []
-    for row in range(2):
-        a, b = imgs[row * 2], imgs[row * 2 + 1]
-        row_w = a.width + col_gap + b.width
-        x = (w - row_w) // 2
-        y = top + row * (height + row_gap)
-        boxes += [(x, y, a), (x + a.width + col_gap, y, b)]
-    win_w = m["L_MAX_PAIR_WIDTH"] + col_gap
-    left = (w - win_w) // 2
-    right = left + win_w
-    if not color:
-        left &= ~7
-        right = (right + 7) & ~7
-        left = max(left, 0)
-        right = min(right, w & ~7)
-    return boxes, (left, top, right - left, block_h)
+LIB.render_face_grid.argtypes = [ctypes.c_int] * 5 + [ctypes.c_char_p]
+LIB.render_face.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p]
 
 
 def glyph_metrics(width, compact=False):
@@ -133,7 +97,7 @@ def glyph_metrics(width, compact=False):
 
 
 def glyph_layout(m, screen_w, area_top, area_h):
-    """Digit cell origins, as src/c/layout.c layout_compute_glyphs."""
+    """Digit cell origins, as src/c/layout.c layout_compute."""
     w, h, gap = m["WIDTH"], m["HEIGHT"], m["GAP"]
     step_x, step_y = (w + gap + 1) & ~1, (h + gap + 1) & ~1
     left = ((screen_w - (step_x + w)) // 2) & ~1
@@ -159,33 +123,30 @@ class Dist:
         LIB.dist_destroy(self.ptr)
 
 
-def face_colors():
-    """RGB of each code render_face writes: the palette, then digit, keyline,
-    inside, lace."""
-    return [rgb(c) for c in design.PALETTE + [design.DIGIT, design.KEYLINE,
-                                               design.INSIDE, design.LACE]]
+# The codes render_face writes: the palette, then digit, keyline, inside, lace.
+FACE_COLORS = design.PALETTE + [design.DIGIT, design.KEYLINE, design.INSIDE, design.LACE]
+BW_LEVELS = design.bw_levels() + list(design.bw_face_levels())
 
 
-def face_grid(hour, minute, w, h):
-    buf = ctypes.create_string_buffer(w * h)
-    if not LIB.render_face_grid(hour, minute, w, h, buf):
+def face_grid(hour, minute, w, h, shift):
+    cell = 1 << shift
+    buf = ctypes.create_string_buffer(((w + cell - 1) >> shift) * ((h + cell - 1) >> shift))
+    if not LIB.render_face_grid(hour, minute, w, h, shift, buf):
         raise MemoryError("render_face_grid")
     return buf
 
 
-def color_face(platform, hour, minute, phase, clock24, state):
-    w, h, _, _, tag = PLATFORMS[platform]
+def face_codes(platform, hour, minute, phase, clock24, state):
+    """The face's color codes, row by row, and the minute's state."""
+    w, h, _, _, tag, shift = PLATFORMS[platform]
     if state is None:
         shown = hour if clock24 else (hour % 12 or 12)
-        state = (face_grid(hour, minute, w, h),
+        state = (face_grid(hour, minute, w, h, shift),
                  Dist(w, h, [int(c) for c in "%02d%02d" % (shown, minute)], tag))
     grid, dist = state
     out = ctypes.create_string_buffer(w * h)
-    LIB.render_face(grid, w, h, dist.ptr, dist.style, phase, out)
-    colors = face_colors()
-    img = Image.new("RGB", (w, h))
-    img.putdata([colors[c] for c in out.raw])
-    return img, state
+    LIB.render_face(grid, w, h, shift, dist.ptr, dist.style, phase, out)
+    return out.raw, state
 
 
 def cells(hour, minute, cw, ch):
@@ -202,30 +163,18 @@ def rgb(c):
 
 def face(platform, hour, minute, phase=0, clock24=True, state=None):
     """The face at a time (24-hour `hour` drives the dive), and the state to
-    pass back to render other phases of the same minute."""
-    w, h, is_round, color, _ = PLATFORMS[platform]
+    pass back to render other phases of the same minute. B&W watches dither
+    each code's level, as src/c/paint.c does."""
+    w, h, is_round, color, _, _ = PLATFORMS[platform]
+    codes, state = face_codes(platform, hour, minute, phase, clock24, state)
+    img = Image.new("RGB", (w, h))
     if color:
-        out, state = color_face(platform, hour, minute, phase, clock24, state)
-        return round_mask(out) if is_round else out, state
-    shown = hour if clock24 else (hour % 12 or 12)
-    boxes, (left, top, win_w, win_h) = layout(platform, shown, minute)
-    shift = 1  # B&W cells are 2 px
-    cw, ch = (win_w + 1) >> shift, (win_h + 1) >> shift
-    grid = state if state is not None else cells(hour, minute, cw, ch)
-    mask = Image.new("1", (w, h), 0)
-    for x, y, img in boxes:
-        mask.paste(img, (x, y))
-    out = Image.new("RGB", (w, h), (0, 0, 0))
-    px, mp = out.load(), mask.load()
-    levels, n = design.BW_LEVELS, design.PALETTE_SIZE
-    for y in range(max(top, 0), min(top + win_h, h)):
-        for x in range(max(left, 0), min(left + win_w, w)):
-            if not mp[x, y]:
-                continue
-            v = grid[((y - top) >> shift) * cw + ((x - left) >> shift)]
-            level = 16 if v == 0xFF else levels[(v + phase) % n]
-            px[x, y] = (255, 255, 255) if BAYER[y & 3][x & 3] < level else (0, 0, 0)
-    return out, grid
+        colors = [rgb(c) for c in FACE_COLORS]
+        img.putdata([colors[c] for c in codes])
+    else:
+        img.putdata([(255, 255, 255) if BAYER[i // w & 3][i % w & 3] < BW_LEVELS[c] else (0, 0, 0)
+                     for i, c in enumerate(codes)])
+    return (round_mask(img) if is_round else img), state
 
 
 def round_mask(img):
@@ -288,7 +237,7 @@ def main():
     os.makedirs(out, exist_ok=True)
     minutes = [0, 10, 20, 30, 40, 50, 59]
 
-    for platform in ("basalt", "emery"):
+    for platform in ("basalt", "emery", "diorite"):
         tiles = []
         for hour in range(12):
             for minute in minutes:

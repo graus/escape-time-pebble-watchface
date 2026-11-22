@@ -4,22 +4,28 @@
 #define FPS 5
 #define PALETTE_SIZE 18
 
-// GColor8 argb bytes, cyclic.
-static const uint8_t s_palette_argb[PALETTE_SIZE] = {
-  0xC2, 0xC6, 0xC7, 0xCB, 0xDB, 0xDF, 0xEF, 0xFF, 0xFE, 0xFD, 0xF9, 0xF8, 0xF4, 0xE4, 0xE0, 0xE1, 0xD1, 0xD2,
-};
-#define COLOR_DIGIT_ARGB 0xFF
-#define COLOR_KEYLINE_ARGB 0xC0
-#define COLOR_INSIDE_ARGB 0xC0
-#define COLOR_LACE_ARGB 0xF8
-
 // Escape counts further apart than this between neighbours: lace.
 #define LACE_STEP 6
 // Depth: the view's escape counts ranked between these quantiles (percent).
 #define DEPTH_LOW_PERCENT 25
 #define DEPTH_HIGH_PERCENT 97
 
-// B&W: lit pixels out of 16 per entry; inside the set is solid white.
-static const uint8_t s_palette_bw[PALETTE_SIZE] = {
-  16, 16, 16, 11, 11, 11, 6, 6, 6, 16, 16, 16, 11, 11, 11, 6, 6, 6,
+// The palette (cyclic) and the face's other colors: GColor8 argb bytes on
+// color watches, lit pixels out of 16 on B&W ones.
+#if defined(PBL_COLOR)
+static const uint8_t s_palette[PALETTE_SIZE] = {
+  0xC2, 0xC6, 0xC7, 0xCB, 0xDB, 0xDF, 0xEF, 0xFF, 0xFE, 0xFD, 0xF9, 0xF8, 0xF4, 0xE4, 0xE0, 0xE1, 0xD1, 0xD2,
 };
+#define FACE_DIGIT 0xFF
+#define FACE_KEYLINE 0xC0
+#define FACE_INSIDE 0xC0
+#define FACE_LACE 0xF8
+#else
+static const uint8_t s_palette[PALETTE_SIZE] = {
+  4, 5, 6, 8, 8, 10, 10, 11, 11, 10, 8, 8, 7, 5, 4, 5, 3, 4,
+};
+#define FACE_DIGIT 16
+#define FACE_KEYLINE 0
+#define FACE_INSIDE 0
+#define FACE_LACE 8
+#endif
