@@ -1,30 +1,61 @@
-"""Escape Time's look, in one place: the palette and the dive targets.
+"""Escape Time's look, in one place: palette, digit weights and dive targets.
 
 tools/build_assets.py writes these into src/c/generated/ for the watch, and
 tools/preview.py renders with them, so previews always match the watch.
 """
 
-# The palette cycles: an escaping point takes color (iterations + phase) mod
-# its length, and the phase advances every frame, so the bands flow outward
-# without recomputing anything. Stops are (position, RGB) on a loop of
-# PALETTE_SIZE; the last stop wraps to the first. Each color is rounded to
-# the Pebble's 64 (2 bits per channel). Nothing is black, so the digits never
-# vanish into the background, and nothing is navy, the inside color.
-PALETTE_SIZE = 24
-PALETTE_STOPS = [
-    (0, 0x0055AA),   # deep blue
-    (5, 0x55AAFF),   # sky
-    (8, 0xFFFFFF),   # white
-    (11, 0xFFAA00),  # gold
-    (15, 0xAA5500),  # amber
-    (19, 0x550055),  # plum
-]
-# Points in the set: a steady color under the moving bands.
-INSIDE = 0x000055
+# Palette steps per second: how fast the bands flow (src/c/main.c reads the
+# generated FPS).
+FPS = 5
 
-# B&W watches dither: lit pixels out of 16 for each palette entry (a triangle
-# wave between DIM and 16), and solid white inside the set.
-BW_DIM = 5
+# The palette cycles: an escaping point takes color (iterations + phase) mod
+# its length, and the phase advances every frame, so the bands flow outward.
+# It is a closed walk through the Pebble's 4x4x4 color cube in which every
+# step changes one channel by one level: neighbours always differ (the motion
+# flows instead of stepping) and lightness rises to white and falls back:
+# deep blue, sky, white, gold, ember, plum. Nothing is black.
+PALETTE = [
+    0x0000AA, 0x0055AA, 0x0055FF, 0x00AAFF, 0x55AAFF, 0x55FFFF,
+    0xAAFFFF, 0xFFFFFF, 0xFFFFAA, 0xFFFF55, 0xFFAA55, 0xFFAA00,
+    0xFF5500, 0xAA5500, 0xAA0000, 0xAA0055, 0x550055, 0x5500AA,
+]
+PALETTE_SIZE = len(PALETTE)
+
+# Color watches: the digits are white and count as part of the set; a black
+# keyline parts them from the bands. Points in the set are black, and
+# filaments finer than a pixel (neighbours that escape more than LACE_STEP
+# iterations apart) are drawn in one steady color instead of confetti.
+DIGIT = 0xFFFFFF
+KEYLINE = 0x000000
+INSIDE = 0x000000
+LACE = 0xFFAA00
+LACE_STEP = 6
+
+# B&W watches keep the digits as windows onto the dive: lit pixels out of 16
+# per palette entry (three levels in a sawtooth, so the bands read as stripes
+# rather than a smooth gray), and solid white inside the set.
+BW_LEVELS = [16, 16, 16, 11, 11, 11, 6, 6, 6] * 2
+
+# Digit stroke weights on color watches, as radii in pixels of a digit 50 px
+# wide (scaled with the digit). Each pixel's radius is
+#     BASE + DEPTH * depth^2 + TIDE * tide^2
+# where depth (0..1) is how deep the dive is at that pixel, ranked between
+# the DEPTH_LOW and DEPTH_HIGH quantiles of the view's escape counts, and tide
+# (0..1) is a triangle wave over half the palette that rides the moving
+# phase (exactly: src/c/face.h). So strokes are fine where the view is shallow, bold where it is
+# deep or in the set, and swell in waves that travel outward with the colors.
+WEIGHT_REFERENCE = 50
+WEIGHT_BASE = 1.6
+WEIGHT_DEPTH = 4.6
+WEIGHT_TIDE = 2.6
+DEPTH_LEVELS = 8      # depth is stored in 3 bits
+DEPTH_LOW = 0.25
+DEPTH_HIGH = 0.97
+# Around each digit: the keyline, then HALO px of bands HALO_BAND px wide that
+# flow outward from the digit as the set's do.
+KEYLINE_WIDTH = 1.4
+HALO = 7.0
+HALO_BAND = 1.5
 
 # Dive targets, one per hour (12, repeated twice a day). Each is a
 # boundary point with detail at every depth: Misiurewicz points M(k, p) from
@@ -54,43 +85,49 @@ def target(hour):
     return (name, r, -i if hour % 2 else i)
 
 
-def lerp_rgb(a, b, t):
-    out = 0
-    for shift in (16, 8, 0):
-        x, y = (a >> shift) & 255, (b >> shift) & 255
-        out |= int(round(x + (y - x) * t)) << shift
-    return out
-
-
-def pebble_rgb(rgb):
-    """Round each channel to the Pebble's 4 levels (0, 85, 170, 255)."""
-    out = 0
-    for shift in (16, 8, 0):
-        v = (rgb >> shift) & 255
-        out |= ((v + 42) // 85 * 85) << shift
-    return out
-
-
-def palette():
-    """PALETTE_SIZE Pebble colors (RGB ints), cyclic."""
-    stops = PALETTE_STOPS + [(PALETTE_SIZE, PALETTE_STOPS[0][1])]
-    pal = []
-    for i in range(PALETTE_SIZE):
-        for (a, ca), (b, cb) in zip(stops, stops[1:]):
-            if a <= i < b:
-                pal.append(pebble_rgb(lerp_rgb(ca, cb, (i - a) / (b - a))))
-                break
-    return pal
-
-
-def bw_levels():
-    """Lit pixels out of 16 per palette entry: a triangle wave, DIM..16."""
-    half = PALETTE_SIZE / 2
-    return [round(BW_DIM + (16 - BW_DIM) * (1 - abs(i - half) / half))
-            for i in range(PALETTE_SIZE)]
+def is_pebble_color(rgb):
+    return all(((rgb >> s) & 255) % 85 == 0 for s in (16, 8, 0))
 
 
 def argb8(rgb):
     """GColor8 byte: 0b11rrggbb."""
     r, g, b = (rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255
     return 0xC0 | (r // 85) << 4 | (g // 85) << 2 | (b // 85)
+
+
+# The distance field is sampled every 2 px, and interpolated distances
+# overshoot by up to 1 px near a centre line, so thinner strokes would break.
+MIN_BASE = 1.5
+
+
+def style(width):
+    """Stroke weights for digits `width` px wide, in quarter pixels.
+
+    Returns (base, depth, tide, keyline, halo, halo_band), the FaceStyle of
+    src/c/face.h.
+    """
+    q = width / WEIGHT_REFERENCE
+    px = (max(MIN_BASE, WEIGHT_BASE * q), WEIGHT_DEPTH * q, WEIGHT_TIDE * q,
+          KEYLINE_WIDTH * q, HALO * q, HALO_BAND * q)
+    return tuple(max(1, round(4 * v)) for v in px)
+
+
+def pad(width):
+    """Margin around a digit's cell that its distance field must cover: the
+    widest stroke, keyline and halo, rounded up to an even pixel."""
+    base, depth, tide, key, halo, _ = style(width)
+    px = (base + depth + tide + key + halo + 3) // 4 + 1
+    return px + px % 2
+
+
+def _one_step(a, b):
+    """True if b is a's neighbour in the color cube: one channel, one level."""
+    steps = [abs(((a >> s) & 255) - ((b >> s) & 255)) // 85 for s in (16, 8, 0)]
+    return sorted(steps) == [0, 0, 1]
+
+
+assert all(is_pebble_color(c) for c in PALETTE + [DIGIT, KEYLINE, INSIDE, LACE])
+assert len(set(PALETTE)) == PALETTE_SIZE
+assert all(_one_step(a, b) for a, b in zip(PALETTE, PALETTE[1:] + PALETTE[:1]))
+assert PALETTE_SIZE % 2 == 0, "the tide is a wave over half the palette"
+assert len(BW_LEVELS) == PALETTE_SIZE

@@ -1,4 +1,5 @@
 #include "layout.h"
+#include "generated/glyphs.h"
 #include "generated/metrics.h"
 
 typedef struct {
@@ -11,9 +12,30 @@ static const Metrics s_metrics[2] = {
 };
 
 DigitSet layout_choose_set(int area_h) {
+#if defined(PBL_COLOR)
+  return area_h >= GLYPH_L_FIT_H ? DigitSetLarge : DigitSetCompact;
+#else
   const Metrics *m = &s_metrics[DigitSetLarge];
   return area_h >= 2 * m->height + m->row_gap ? DigitSetLarge : DigitSetCompact;
+#endif
 }
+
+#if defined(PBL_COLOR)
+void layout_compute_glyphs(Layout *out, DigitSet set, GRect area, GSize screen) {
+  const bool large = set == DigitSetLarge;
+  const int w = large ? GLYPH_L_WIDTH : GLYPH_S_WIDTH;
+  const int h = large ? GLYPH_L_HEIGHT : GLYPH_S_HEIGHT;
+  const int gap = large ? GLYPH_L_GAP : GLYPH_S_GAP;
+  // Even steps keep the right column and bottom row on the sample grid too.
+  const int step_x = (w + gap + 1) & ~1, step_y = (h + gap + 1) & ~1;
+  const int left = ((screen.w - (step_x + w)) / 2) & ~1;
+  const int top = (area.origin.y + (area.size.h - (step_y + h)) / 2) & ~1;
+  for (int i = 0; i < 4; i++) {
+    out->digits[i] = GRect(left + (i % 2) * step_x, top + (i / 2) * step_y, w, h);
+  }
+  out->window = GRect(0, 0, screen.w, screen.h);
+}
+#endif
 
 void layout_compute(Layout *out, DigitSet set, GRect area, int screen_w,
                     const GSize digit_sizes[4]) {

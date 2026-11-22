@@ -3,12 +3,12 @@
 
     python3 tools/preview.py [out_dir]     (default: preview/)
 
-The fractal comes from the watch's own src/c/mandel.c, dive.c and grid
-logic, compiled for the host and called through ctypes; the digits are the
-real resources, laid out as src/c/layout.c does; colors come from
-tools/design.py, as src/c/generated/palette.h does. So a preview is the
-watch face, pixel for pixel, at any time of day (the emulator only shows
-the current time).
+The fractal and, on color watches, the whole face come from the watch's own
+src/c/mandel.c, dive.c, grid.c and face.c, compiled for the host and called
+through ctypes; the digits are the real resources, laid out as
+src/c/layout.c does; colors come from tools/design.py, as
+src/c/generated/palette.h does. So a preview is the watch face, pixel for
+pixel, at any time of day (the emulator only shows the current time).
 
 Every image comes in two versions: exact Pebble colors, and `-screen`, as
 the color display shows them (muted; see tools/display.py). Judge the look
@@ -35,7 +35,7 @@ sys.path.insert(0, HERE)
 import design  # noqa: E402
 import display  # noqa: E402
 
-FPS = 10  # as src/c/main.c
+FPS = design.FPS
 
 # name: (width, height, round, color, digit tag)
 PLATFORMS = {
@@ -60,10 +60,12 @@ class View(ctypes.Structure):
 def load_lib():
     lib_path = os.path.join(ROOT, "tools", "host", "librender.so")
     sources = [os.path.join(ROOT, p) for p in
-               ("tools/host/render.c", "src/c/mandel.c", "src/c/dive.c")]
-    newest = max(os.path.getmtime(p) for p in sources + [
-        os.path.join(ROOT, "src/c/generated/targets.h"),
-        os.path.join(ROOT, "src/c/mandel.h"), os.path.join(ROOT, "src/c/dive.h")])
+               ("tools/host/render.c", "src/c/mandel.c", "src/c/dive.c",
+                "src/c/grid.c", "src/c/face.c")]
+    headers = [os.path.join(ROOT, "src/c", p) for p in
+               ("generated/targets.h", "generated/palette.h", "mandel.h", "dive.h",
+                "grid.h", "face.h")]
+    newest = max(os.path.getmtime(p) for p in sources + headers)
     if not os.path.exists(lib_path) or os.path.getmtime(lib_path) < newest:
         subprocess.check_call(["cc", "-O2", "-shared", "-fPIC", "-Wall", "-Wextra",
                                "-o", lib_path] + sources)
@@ -71,6 +73,13 @@ def load_lib():
 
 
 LIB = load_lib()
+LIB.dist_create.restype = ctypes.c_void_p
+LIB.dist_create.argtypes = [ctypes.c_uint16, ctypes.c_uint16]
+LIB.dist_destroy.argtypes = [ctypes.c_void_p]
+LIB.dist_merge_row.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                               ctypes.c_char_p, ctypes.c_int]
+LIB.render_face.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p,
+                            ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p]
 
 
 def metrics(tag_width):
@@ -112,6 +121,73 @@ def layout(platform, hh, mm):
     return boxes, (left, top, right - left, block_h)
 
 
+def glyph_metrics(width, compact=False):
+    """A digit set's GLYPH_* constants from src/c/generated/glyphs.h."""
+    text = open(os.path.join(ROOT, "src/c/generated/glyphs.h")).read()
+    block = re.search(r"PBL_DISPLAY_WIDTH == %d\n(.*?)#(?:el|endif)" % width, text, re.S).group(1)
+    name = "S" if compact else "L"
+    m = {k: int(v) for k, v in re.findall(r"#define GLYPH_%s_(\w+) (\d+)\n" % name, block)}
+    style = re.search(r"#define GLYPH_%s_STYLE \{([\d, ]+)\}" % name, block).group(1)
+    m["STYLE"] = bytes(int(v) for v in style.split(","))
+    return m
+
+
+def glyph_layout(m, screen_w, area_top, area_h):
+    """Digit cell origins, as src/c/layout.c layout_compute_glyphs."""
+    w, h, gap = m["WIDTH"], m["HEIGHT"], m["GAP"]
+    step_x, step_y = (w + gap + 1) & ~1, (h + gap + 1) & ~1
+    left = ((screen_w - (step_x + w)) // 2) & ~1
+    top = (area_top + (area_h - (step_y + h)) // 2) & ~1
+    return [(left + (i % 2) * step_x, top + (i // 2) * step_y) for i in range(4)]
+
+
+class Dist:
+    """The watch's DistField of four digits (src/c/face.c), as main.c builds it."""
+
+    def __init__(self, width, height, digits, tag):
+        self.ptr = LIB.dist_create(width, height)
+        m = glyph_metrics(width)
+        cols, rows, pad = m["COLS"], m["ROWS"], m["PAD"]
+        for d, (x, y) in zip(digits, glyph_layout(m, width, 0, height)):
+            data = open(os.path.join(ROOT, "resources/glyphs/%d~%s.bin" % (d, tag)), "rb").read()
+            for r in range(rows):
+                LIB.dist_merge_row(self.ptr, (x - pad) // 2, (y - pad) // 2 + r,
+                                   data[r * cols:(r + 1) * cols], cols)
+        self.style = m["STYLE"]
+
+    def __del__(self):
+        LIB.dist_destroy(self.ptr)
+
+
+def face_colors():
+    """RGB of each code render_face writes: the palette, then digit, keyline,
+    inside, lace."""
+    return [rgb(c) for c in design.PALETTE + [design.DIGIT, design.KEYLINE,
+                                               design.INSIDE, design.LACE]]
+
+
+def face_grid(hour, minute, w, h):
+    buf = ctypes.create_string_buffer(w * h)
+    if not LIB.render_face_grid(hour, minute, w, h, buf):
+        raise MemoryError("render_face_grid")
+    return buf
+
+
+def color_face(platform, hour, minute, phase, clock24, state):
+    w, h, _, _, tag = PLATFORMS[platform]
+    if state is None:
+        shown = hour if clock24 else (hour % 12 or 12)
+        state = (face_grid(hour, minute, w, h),
+                 Dist(w, h, [int(c) for c in "%02d%02d" % (shown, minute)], tag))
+    grid, dist = state
+    out = ctypes.create_string_buffer(w * h)
+    LIB.render_face(grid, w, h, dist.ptr, dist.style, phase, out)
+    colors = face_colors()
+    img = Image.new("RGB", (w, h))
+    img.putdata([colors[c] for c in out.raw])
+    return img, state
+
+
 def cells(hour, minute, cw, ch):
     buf = (ctypes.c_uint16 * (cw * ch))()
     view = View()
@@ -124,37 +200,38 @@ def rgb(c):
     return ((c >> 16) & 255, (c >> 8) & 255, c & 255)
 
 
-def face(platform, hour, minute, phase=0, clock24=True, grid=None):
-    """The face at a time (24-hour `hour` drives the dive)."""
+def face(platform, hour, minute, phase=0, clock24=True, state=None):
+    """The face at a time (24-hour `hour` drives the dive), and the state to
+    pass back to render other phases of the same minute."""
     w, h, is_round, color, _ = PLATFORMS[platform]
+    if color:
+        out, state = color_face(platform, hour, minute, phase, clock24, state)
+        return round_mask(out) if is_round else out, state
     shown = hour if clock24 else (hour % 12 or 12)
     boxes, (left, top, win_w, win_h) = layout(platform, shown, minute)
-    shift = 0 if color else 1
-    cw, ch = (win_w + (1 << shift) - 1) >> shift, (win_h + (1 << shift) - 1) >> shift
-    if grid is None:
-        grid = cells(hour, minute, cw, ch)
+    shift = 1  # B&W cells are 2 px
+    cw, ch = (win_w + 1) >> shift, (win_h + 1) >> shift
+    grid = state if state is not None else cells(hour, minute, cw, ch)
     mask = Image.new("1", (w, h), 0)
     for x, y, img in boxes:
         mask.paste(img, (x, y))
     out = Image.new("RGB", (w, h), (0, 0, 0))
     px, mp = out.load(), mask.load()
-    pal, levels = design.palette(), design.bw_levels()
-    n = design.PALETTE_SIZE
+    levels, n = design.BW_LEVELS, design.PALETTE_SIZE
     for y in range(max(top, 0), min(top + win_h, h)):
         for x in range(max(left, 0), min(left + win_w, w)):
             if not mp[x, y]:
                 continue
             v = grid[((y - top) >> shift) * cw + ((x - left) >> shift)]
-            if color:
-                px[x, y] = rgb(design.INSIDE if v == 0xFF else pal[(v + phase) % n])
-            else:
-                level = 16 if v == 0xFF else levels[(v + phase) % n]
-                px[x, y] = (255, 255, 255) if BAYER[y & 3][x & 3] < level else (0, 0, 0)
-    if is_round:
-        circle = Image.new("L", (w, h), 0)
-        ImageDraw.Draw(circle).ellipse((0, 0, w - 1, h - 1), fill=255)
-        out = Image.composite(out, Image.new("RGB", (w, h)), circle)
+            level = 16 if v == 0xFF else levels[(v + phase) % n]
+            px[x, y] = (255, 255, 255) if BAYER[y & 3][x & 3] < level else (0, 0, 0)
     return out, grid
+
+
+def round_mask(img):
+    circle = Image.new("L", img.size, 0)
+    ImageDraw.Draw(circle).ellipse((0, 0, img.width - 1, img.height - 1), fill=255)
+    return Image.composite(img, Image.new("RGB", img.size), circle)
 
 
 def sheet(tiles, cols, label_h=14, pad=6, bg=(24, 24, 24)):
@@ -172,7 +249,7 @@ def sheet(tiles, cols, label_h=14, pad=6, bg=(24, 24, 24)):
 
 def fractal(hour, minute, w=135, h=146):
     grid = cells(hour, minute, w, h)
-    pal, n = design.palette(), design.PALETTE_SIZE
+    pal, n = design.PALETTE, design.PALETTE_SIZE
     img = Image.new("RGB", (w, h))
     img.putdata([rgb(design.INSIDE if v == 0xFF else pal[v % n]) for v in grid])
     return img
@@ -234,8 +311,8 @@ def main():
     save(sheet(tiles, len(minutes)), out, "fractal.png")
 
     for platform, (hour, minute) in (("emery", (0, 45)), ("basalt", (5, 30))):
-        first, grid = face(platform, hour, minute, 0)
-        frames = [first] + [face(platform, hour, minute, p, grid=grid)[0]
+        first, state = face(platform, hour, minute, 0)
+        frames = [first] + [face(platform, hour, minute, p, state=state)[0]
                             for p in range(1, design.PALETTE_SIZE)]
         frames = [f.resize((f.width * 2, f.height * 2), Image.NEAREST) for f in frames]
         save_gif(frames, out, "cycle-%s.gif" % platform)

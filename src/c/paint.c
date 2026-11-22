@@ -4,37 +4,17 @@
 
 #if defined(PBL_COLOR)
 
-void paint(GBitmap *fb, const Grid *grid, GRect window, uint8_t phase) {
-  // One lookup per cell value for this frame's phase.
-  uint8_t lut[256];
-  for (int v = 0; v < PALETTE_SIZE; v++) {
-    lut[v] = s_palette_argb[(v + phase) % PALETTE_SIZE];
-  }
-  lut[GRID_INSIDE] = PALETTE_INSIDE_ARGB;
-
-  GRect fb_bounds = gbitmap_get_bounds(fb);
-  int top = window.origin.y, left = window.origin.x;
-  int y0 = top > 0 ? top : 0;
-  int y1 = top + window.size.h;
-  if (y1 > fb_bounds.size.h) y1 = fb_bounds.size.h;
-  int shift = grid->shift;
-  for (int y = y0; y < y1; y++) {
-    int cy = (y - top) >> shift;
-    if (cy >= grid->h) break;
+void paint_face(GBitmap *fb, const FaceFrame *frame, const Grid *grid,
+                const DistField *dist) {
+  GRect bounds = gbitmap_get_bounds(fb);
+  int rows = bounds.size.h;
+  if (rows > (grid->h << grid->shift)) rows = grid->h << grid->shift;
+  for (int y = 0; y < rows; y++) {
     // Row info gives the real x range of each row, which matters on round
     // screens where rows are shorter than the display width.
     GBitmapDataRowInfo info = gbitmap_get_data_row_info(fb, y);
-    int x0 = left > info.min_x ? left : info.min_x;
-    int x1 = left + window.size.w - 1;
-    if (x1 > info.max_x) x1 = info.max_x;
-    const uint8_t *cells = grid->cells + cy * grid->w;
-    uint8_t *px = info.data;
-    for (int x = x0; x <= x1; x++) {
-      if (px[x] == GColorWhiteARGB8) {
-        int cx = (x - left) >> shift;
-        if (cx < grid->w) px[x] = lut[cells[cx]];
-      }
-    }
+    face_row(frame, grid->cells + (y >> grid->shift) * grid->w, grid->shift, dist,
+             y, info.min_x, info.max_x, info.data);
   }
 }
 

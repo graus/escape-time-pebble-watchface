@@ -39,140 +39,460 @@
           "name": "DIGIT_0",
           "file": "digits/0.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_1",
           "file": "digits/1.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_2",
           "file": "digits/2.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_3",
           "file": "digits/3.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_4",
           "file": "digits/4.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_5",
           "file": "digits/5.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_6",
           "file": "digits/6.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_7",
           "file": "digits/7.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_8",
           "file": "digits/8.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_9",
           "file": "digits/9.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_0",
           "file": "digits/s0.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_1",
           "file": "digits/s1.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_2",
           "file": "digits/s2.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_3",
           "file": "digits/s3.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_4",
           "file": "digits/s4.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_5",
           "file": "digits/s5.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_6",
           "file": "digits/s6.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_7",
           "file": "digits/s7.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_8",
           "file": "digits/s8.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
         },
         {
           "type": "bitmap",
           "name": "DIGIT_S_9",
           "file": "digits/s9.png",
           "memoryFormat": "1Bit",
-          "spaceOptimization": "memory"
+          "spaceOptimization": "memory",
+          "targetPlatforms": [
+            "aplite",
+            "diorite",
+            "flint"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_0",
+          "file": "glyphs/0.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_1",
+          "file": "glyphs/1.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_2",
+          "file": "glyphs/2.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_3",
+          "file": "glyphs/3.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_4",
+          "file": "glyphs/4.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_5",
+          "file": "glyphs/5.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_6",
+          "file": "glyphs/6.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_7",
+          "file": "glyphs/7.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_8",
+          "file": "glyphs/8.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_9",
+          "file": "glyphs/9.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_0",
+          "file": "glyphs/s0.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_1",
+          "file": "glyphs/s1.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_2",
+          "file": "glyphs/s2.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_3",
+          "file": "glyphs/s3.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_4",
+          "file": "glyphs/s4.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_5",
+          "file": "glyphs/s5.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_6",
+          "file": "glyphs/s6.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_7",
+          "file": "glyphs/s7.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_8",
+          "file": "glyphs/s8.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
+        },
+        {
+          "type": "raw",
+          "name": "GLYPH_S_9",
+          "file": "glyphs/s9.bin",
+          "targetPlatforms": [
+            "basalt",
+            "chalk",
+            "emery",
+            "gabbro"
+          ]
         }
       ]
     }

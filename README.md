@@ -1,22 +1,28 @@
 # Escape Time
 
-A Pebble watch face: the time in four large digits, each one a window onto a
-dive into the Mandelbrot set. The name is the algorithm's: the escape-time
-algorithm colors each point by how many steps it takes to escape.
+A Pebble watch face: the time in four large digits and a dive into the
+Mandelbrot set. On color watches the digits are part of the set: white
+strokes whose bands flow outward with the fractal's, fine where the dive is
+shallow, bold where it is deep, swelling in waves as the colors move. On B&W
+watches each digit is a window onto the dive. The name is the algorithm's:
+the escape-time algorithm colors each point by how many steps it takes to
+escape.
 
 - **The hour picks where to dive:** twelve targets spread around the set,
   repeated twice a day; odd hours dive into the mirror image.
 - **The minute sets how deep:** at :00 the whole set, then 1.2x deeper every
   minute, to about 47,000x at :59.
 - **It moves by color cycling:** the view is computed once a minute and the
-  palette flows through it, so animating costs almost nothing.
+  palette flows through it, so animating costs almost nothing. On color
+  watches the digits' outline moves with it.
 
 | basalt | emery | gabbro | diorite |
 |---|---|---|---|
 | ![basalt](docs/screenshots/basalt.png) | ![emery](docs/screenshots/emery.png) | ![gabbro](docs/screenshots/gabbro.png) | ![diorite](docs/screenshots/diorite.png) |
 
-Status: first version, before the design pass. See
-[docs/design](docs/design/README.md) for the brief and review images.
+The emery and gabbro images are rendered by `tools/preview.py` (the basalt
+one, from the emulator, matches its preview pixel for pixel). See
+[docs/design](docs/design/README.md) for the design brief.
 
 ## How it works
 
@@ -36,27 +42,41 @@ Status: first version, before the design pass. See
 - **Spread over frames.** A new minute's view is computed a row at a time
   within a 40 ms budget per frame, interlaced (every 8th row first), so it
   sharpens evenly over the old one (`src/c/grid.c`). Measured in the basalt
-  emulator: about 140 ms per view.
-- **Memory.** One byte per cell of the digit block: 1 px cells on color
-  watches (about 20 KB on basalt, 40 KB on emery), 2 px cells on B&W ones
-  (5 KB on aplite), coarser if the heap is short.
+  emulator: 130-250 ms per view of the whole screen.
+- **Digits as distance fields (color).** Each digit is a few centre lines
+  (`tools/glyphs.py`). The watch stores, per digit, the distance from every
+  point nearby to those lines, sampled every 2 px; a pixel is digit when its
+  (bilinearly interpolated) distance is under its stroke radius. The radius
+  comes from the pixel's cell: its depth (where its escape count ranks in
+  the view) and a triangle wave riding the palette phase. Both are looked up
+  per frame in 256-entry tables (`src/c/face.c`), so the shape changes every
+  frame for a subtraction and a few compares per pixel. Past the stroke: a
+  black keyline, then bands that flow out of the digit.
+- **Lace.** Deep in the dive, filaments are finer than a pixel and their
+  colors turn to confetti. A cell whose escape count jumps by more than 6
+  from its left neighbour's is drawn in one steady color instead.
+- **Memory.** One byte per cell: on color watches the whole screen in 1 px
+  cells (24 KB on basalt, 46 KB on emery, 68 KB on gabbro) plus the distance
+  field (6 KB on basalt); on B&W ones the digit block in 2 px cells (5 KB on
+  aplite). Coarser cells if the heap is short.
 
-The digits, layout and Quick View handling come from
+The B&W digits, layout and Quick View handling come from
 [Hearth](https://github.com/graus/hearth-pebble-watchface).
 
 ## Building and previewing
 
-    python3 tools/build_assets.py     # digits, metrics, palette, targets, icon
+    python3 tools/build_assets.py     # digits, glyphs, metrics, palette, targets, icon
     pebble build
     make -C tools/host test           # the engine on the host
     python3 tools/preview.py          # faces at any time, into preview/
 
-`tools/design.py` holds the palette and the targets. `tools/preview.py`
+`tools/design.py` holds the palette, stroke weights and targets;
+`tools/glyphs.py` the color watches' digit shapes. `tools/preview.py`
 renders with the watch's own C code (compiled for the host), so previews
 match the watch pixel for pixel, at any time of day; `-screen` images
 simulate the color display's muted gamut (`tools/display.py`).
 
 ## License
 
-MIT. Rubik (the digit font) is under the SIL Open Font License
+MIT. Rubik (the B&W digit font) is under the SIL Open Font License
 (`tools/fonts/OFL.txt`).
