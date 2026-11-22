@@ -1,0 +1,6 @@
+# Glyph distance fields are raw bytes; some contain no NUL and would be
+# taken for text (and have 0x0A rewritten on checkout).
+resources/glyphs/*.bin binary
+*.png binary
+*.gif binary
+*.ttf binary

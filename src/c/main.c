@@ -70,7 +70,7 @@ static uint8_t s_dist_digits[4] = {0xFF, 0xFF, 0xFF, 0xFF};  // what s_dist hold
 static FaceFrame s_frame;
 
 static Grid *s_grid;
-static int s_hour, s_minute;  // the view being shown
+static int s_hour = -1, s_minute = -1;  // the view being shown (none yet)
 
 static AppTimer *s_frame_timer;
 static bool s_focused = true;
@@ -145,7 +145,11 @@ static void merge_glyph(DigitSet set, uint8_t value, GPoint cell) {
   int i = (cell.x - field->pad) / 2, j = (cell.y - field->pad) / 2;
   uint8_t row[GLYPH_MAX_COLS];
   for (int r = 0; r < field->rows; r++) {
-    resource_load_byte_range(handle, r * field->cols, row, field->cols);
+    // A short read would merge stale stack bytes as distances: skip the row.
+    if (resource_load_byte_range(handle, r * field->cols, row, field->cols) != field->cols) {
+      APP_LOG(APP_LOG_LEVEL_ERROR, "glyph %d row %d: short read", value, r);
+      continue;
+    }
     dist_merge_row(s_dist, i, j + r, row, field->cols);
   }
 }
@@ -198,17 +202,25 @@ static void update_time(struct tm *t) {
 // ---------------------------------------------------------------------------
 // Drawing
 
+// Without memory for the dive, the digits are still drawn, over a flat grid
+// of points in the set: 2x2 cells of 256 px cover any screen, so this costs
+// four bytes. White digits and their keyline on black: the time, not nothing.
+static uint8_t s_flat_cells[4] = {
+  GRID_PACKED_INSIDE, GRID_PACKED_INSIDE, GRID_PACKED_INSIDE, GRID_PACKED_INSIDE,
+};
+static const Grid s_flat_grid = {.w = 2, .h = 2, .shift = 8, .cells = s_flat_cells};
+
 static void canvas_update(Layer *layer, GContext *ctx) {
-  if (!s_grid || !s_dist) {
+  if (!s_dist) {
     graphics_context_set_fill_color(ctx, GColorBlack);
     graphics_fill_rect(ctx, layer_get_bounds(layer), 0, GCornerNone);
-    return;  // out of memory: logged when it happened
+    return;  // out of memory even for the digits: logged when it happened
   }
   // Every pixel is shaded, so nothing needs clearing first.
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   if (fb) {
     face_frame(&s_frame, &s_styles[s_digit_set], &s_colors, s_phase);
-    paint_face(fb, &s_frame, s_grid, s_dist);
+    paint_face(fb, &s_frame, s_grid ? s_grid : &s_flat_grid, s_dist);
     graphics_release_frame_buffer(ctx, fb);
   }
 }
@@ -274,7 +286,6 @@ static void window_load(Window *window) {
   }
   create_grid(screen);
 
-  s_hour = -1;  // force the first view
   time_t now = time(NULL);
   update_time(localtime(&now));
 }

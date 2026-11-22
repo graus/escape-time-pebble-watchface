@@ -159,3 +159,4 @@ assert all(is_pebble_color(c) for c in PALETTE + [DIGIT, KEYLINE, INSIDE, LACE])
 assert len(set(PALETTE)) == PALETTE_SIZE
 assert all(_one_step(a, b) for a, b in zip(PALETTE, PALETTE[1:] + PALETTE[:1]))
 assert PALETTE_SIZE % 2 == 0, "the tide is a wave over half the palette"
+assert PALETTE_SIZE >= 4, "the tide's crest is 0 below 4 entries (src/c/face.c divides by it)"

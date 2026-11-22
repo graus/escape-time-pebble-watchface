@@ -5,3 +5,4 @@ tools/host/test_mandel
 tools/host/librender.*
 /preview/
 *.dSYM/
+.DS_Store
