@@ -1,12 +1,16 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-11-22)
 
-- Settings, in the Pebble app (the watch remembers them):
-  - Dark mode: black digits outlined in white, over navy, violet, plum,
-    crimson and ember. B&W watches dither it darker to match.
-  - Dark at night: switch to Dark between set hours (22:00-07:00 by
-    default), whatever the look.
+Dark mode, and the face's first settings.
+
+- Dark mode: black digits, drawn in the same black as the set and outlined
+  in white, over a darker palette of navy, violet, plum, crimson and ember.
+  Black-and-white watches dither it darker to match.
+- Dark at night: dark mode can turn itself on between two hours you choose
+  (22:00-07:00 by default) and off again in the morning.
+- Both are in the face's settings in the Pebble app. The watch remembers
+  them, so the face still needs the phone only to change them.
 
 ## 1.0.0 (2026-11-22)
 

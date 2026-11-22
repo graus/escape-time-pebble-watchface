@@ -9,6 +9,7 @@ compiled for the host), never a mock-up. Outputs:
   store/screenshots/<platform>_timelapse.gif   an hour's dive in a few seconds,
                                                at the platform's exact screen size
   store/screenshots/<platform>_screenshot.png  one moment, same size
+  store/screenshots/<platform>_screenshot_dark.png  the same moment in dark mode
   store/icon-80.png, store/icon-144.png        the face in miniature
   store/banner-720x320.png                     the store page banner
   docs/timelapse.gif                           the README's timelapse (emery, 2x)
@@ -50,8 +51,9 @@ SIZES = {"aplite": (144, 168), "basalt": (144, 168), "diorite": (144, 168),
          "gabbro": (260, 260)}
 
 
-def frame(platform, hour, minute, phase, state=None):
-    img, state = preview.face(platform, hour, minute, phase, clock24=True, state=state)
+def frame(platform, hour, minute, phase, state=None, mode="light"):
+    img, state = preview.face(platform, hour, minute, phase, clock24=True, state=state,
+                              mode=mode)
     if preview.PLATFORMS[platform][3]:  # color: as the screen shows it
         img = preview.on_screen(img)
     return img, state
@@ -150,8 +152,10 @@ def main():
         frames, durations = timelapse(platform)
         assert frames[0].size == size, (platform, frames[0].size)
         n = save_gif(frames, durations, os.path.join(SHOTS, "%s_timelapse.gif" % platform))
-        still, _ = frame(platform, *STILL, phase=4)
+        still, state = frame(platform, *STILL, phase=4)
         still.save(os.path.join(SHOTS, "%s_screenshot.png" % platform), optimize=True)
+        dark, _ = frame(platform, *STILL, phase=4, state=state, mode="dark")
+        dark.save(os.path.join(SHOTS, "%s_screenshot_dark.png" % platform), optimize=True)
         print("%-8s timelapse %d frames, %.0f KB" % (platform, len(frames), n / 1024))
     frames, durations = timelapse("emery")
     n = save_gif(frames, durations, os.path.join(ROOT, "docs", "timelapse.gif"), scale=2)
