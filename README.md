@@ -19,6 +19,10 @@ colors each point by how many steps it takes to escape.
   While still, nothing runs but the minute tick. Painting a frame takes
   11.4 ms on a real watch, so animating nonstop at 5 fps would keep the CPU
   busy about 6% of the time, plus the display updates.
+- **Dark mode** (a setting): black digits made of the same black as the
+  set, outlined in white, over a darker palette (navy, violet, plum,
+  crimson, ember; no white). *Dark at night* turns it on between set hours
+  (22:00-07:00 by default); the face changes on the hour.
 
 An hour on the watch, one frame per minute (16:00-16:59, the dive into the
 Northwest star; every frame is the watch's own rendering):
@@ -69,6 +73,13 @@ pixel. See
   palette's lightness on the color screen, scaled to 1-11 of 16 so solid
   white stays the digits', dithered with a 4x4 Bayer pattern
   (`src/c/paint.c`).
+- **Settings.** The phone's settings page (`src/pkjs/index.js`) is a small
+  HTML page opened as a data URL, with no library or server: Clay, the usual
+  one, has watch-side code that does not build for flint or gabbro. Saving
+  sends the values as message keys; the watch keeps them (`persist`), so the
+  face needs the phone only to change them. A look is a palette and four
+  colors (`MODES` in `tools/design.py`, `FaceColors` on the watch); the
+  dive and the digits' shapes stay the same, so switching costs nothing.
 - **Memory.** One byte per cell of the screen: 1 px cells (24 KB on basalt,
   46 KB on emery, 68 KB on gabbro) plus the distance field (6 KB on basalt).
   Aplite's 24 KB only fits 2 px cells (6 KB); the digits stay sharp, as
@@ -82,7 +93,7 @@ The layout and Quick View handling come from
     python3 tools/build_assets.py     # digits, palette, targets, icon
     pebble build
     make -C tools/host test           # the engine on the host
-    python3 tools/preview.py          # faces at any time, into preview/
+    python3 tools/preview.py          # faces at any time, light and dark, into preview/
     python3 tools/build_store_assets.py  # store timelapses, stills, icons, banner
     store/publish.sh                  # publish to the Pebble app store (goes live)
 

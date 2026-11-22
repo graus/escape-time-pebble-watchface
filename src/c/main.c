@@ -4,7 +4,9 @@
 // The dive fills the screen and the digits are part of it: white strokes
 // that count as points in the set, so the bands flow out of them; their
 // weight follows the depth of the dive and swells with the moving palette
-// (face.h). B&W watches show the same face, dithered.
+// (face.h). B&W watches show the same face, dithered. Settings, from the
+// phone, pick its look, light (white digits) or dark (black digits over a
+// darker palette), and can switch to dark for set night hours.
 //
 // To save the battery the face is still most of the time: frames run only
 // while a new minute's view is being computed (it sharpens in, then stops)
@@ -57,14 +59,35 @@ static const FaceStyle s_styles[2] = {
   [DigitSetCompact] = GLYPH_S_STYLE,
 };
 
-static const FaceColors s_colors = {
-  .palette = s_palette,
-  .size = PALETTE_SIZE,
-  .digit = FACE_DIGIT,
-  .keyline = FACE_KEYLINE,
-  .inside = FACE_INSIDE,
-  .lace = FACE_LACE,
+// The face's looks (tools/design.py MODES), filled in from the generated
+// tables when the face starts.
+static FaceColors s_colors[FACE_MODES];
+
+static void init_colors(void) {
+  for (int m = 0; m < FACE_MODES; m++) {
+    s_colors[m] = (FaceColors){
+      .palette = s_palettes[m],
+      .size = PALETTE_SIZE,
+      .digit = s_face_colors[m][0],
+      .keyline = s_face_colors[m][1],
+      .inside = s_face_colors[m][2],
+      .lace = s_face_colors[m][3],
+    };
+  }
+}
+
+// Settings, kept on the watch so the face needs the phone only to change
+// them. PERSIST_KEY_DARK held the first build's dark mode on/off.
+enum {
+  PERSIST_KEY_DARK = 1,
+  PERSIST_KEY_MODE,
+  PERSIST_KEY_NIGHT,
+  PERSIST_KEY_NIGHT_START,
+  PERSIST_KEY_NIGHT_END,
 };
+static uint8_t s_mode = FACE_MODE_LIGHT;  // the chosen look
+static bool s_night;                      // dark from s_night_start to s_night_end
+static uint8_t s_night_start = 22, s_night_end = 7;  // hours, 0-23
 
 static Window *s_window;
 static Layer *s_canvas;
@@ -219,9 +242,27 @@ static void update_time(struct tm *t) {
 // ---------------------------------------------------------------------------
 // Drawing
 
+// Whether an hour (0-23) falls in the night hours: from the start up to the
+// end, over midnight when the start is later. Equal hours: no night.
+static bool is_night_hour(int hour) {
+  if (s_night_start <= s_night_end) {
+    return hour >= s_night_start && hour < s_night_end;
+  }
+  return hour >= s_night_start || hour < s_night_end;
+}
+
+// The look to paint now: dark during the night hours, if set, else the
+// chosen one. The minute tick repaints, so the switch comes on the hour.
+static uint8_t shown_mode(void) {
+  if (s_night && s_hour >= 0 && is_night_hour(s_hour)) {
+    return FACE_MODE_DARK;
+  }
+  return s_mode;
+}
+
 // Without memory for the dive, the digits are still drawn, over a flat grid
 // of points in the set: 2x2 cells of 256 px cover any screen, so this costs
-// four bytes. White digits and their keyline on black: the time, not nothing.
+// four bytes. The digits and their keyline on black: the time, not nothing.
 static uint8_t s_flat_cells[4] = {
   GRID_PACKED_INSIDE, GRID_PACKED_INSIDE, GRID_PACKED_INSIDE, GRID_PACKED_INSIDE,
 };
@@ -237,7 +278,7 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   GBitmap *fb = graphics_capture_frame_buffer(ctx);
   if (fb) {
     uint32_t start = now_ms();
-    face_frame(&s_frame, &s_styles[s_digit_set], &s_colors, s_phase);
+    face_frame(&s_frame, &s_styles[s_digit_set], &s_colors[shown_mode()], s_phase);
     paint_face(fb, &s_frame, s_grid ? s_grid : &s_flat_grid, s_dist);
     graphics_release_frame_buffer(ctx, fb);
     if (s_profile_frames < PROFILE_FRAMES) {
@@ -345,6 +386,70 @@ static void unobstructed_did_change(void *context) {
 #endif
 
 // ---------------------------------------------------------------------------
+// Settings
+
+// A setting's value as a number, whatever integer type the phone sent.
+static int32_t tuple_int(const Tuple *t) {
+  switch (t->type) {
+    case TUPLE_INT:
+      return t->length == 1 ? t->value->int8 : t->length == 2 ? t->value->int16 : t->value->int32;
+    case TUPLE_UINT:
+      return t->length == 1 ? t->value->uint8 : t->length == 2 ? t->value->uint16 : (int32_t)t->value->uint32;
+    case TUPLE_CSTRING:
+      return atoi(t->value->cstring);
+    default:
+      return 0;
+  }
+}
+
+static uint8_t clamp_hour(int32_t hour) {
+  return hour < 0 ? 0 : hour > 23 ? 23 : (uint8_t)hour;
+}
+
+// The phone's settings page (src/pkjs) sends all its values when saved.
+static void inbox_received(DictionaryIterator *iter, void *context) {
+  Tuple *t;
+  if ((t = dict_find(iter, MESSAGE_KEY_Mode))) {
+    int32_t mode = tuple_int(t);
+    s_mode = mode >= 0 && mode < FACE_MODES ? (uint8_t)mode : FACE_MODE_LIGHT;
+    persist_write_int(PERSIST_KEY_MODE, s_mode);
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_NightDark))) {
+    s_night = tuple_int(t) != 0;
+    persist_write_bool(PERSIST_KEY_NIGHT, s_night);
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_NightStart))) {
+    s_night_start = clamp_hour(tuple_int(t));
+    persist_write_int(PERSIST_KEY_NIGHT_START, s_night_start);
+  }
+  if ((t = dict_find(iter, MESSAGE_KEY_NightEnd))) {
+    s_night_end = clamp_hour(tuple_int(t));
+    persist_write_int(PERSIST_KEY_NIGHT_END, s_night_end);
+  }
+  APP_LOG(APP_LOG_LEVEL_INFO, "settings: mode %d, night %s %02d-%02d, showing %d", s_mode,
+          s_night ? "on" : "off", s_night_start, s_night_end, shown_mode());
+  if (s_canvas) {
+    layer_mark_dirty(s_canvas);
+  }
+}
+
+static void load_settings(void) {
+  if (persist_exists(PERSIST_KEY_MODE)) {
+    int32_t mode = persist_read_int(PERSIST_KEY_MODE);
+    s_mode = mode >= 0 && mode < FACE_MODES ? (uint8_t)mode : FACE_MODE_LIGHT;
+  } else if (persist_exists(PERSIST_KEY_DARK) && persist_read_bool(PERSIST_KEY_DARK)) {
+    s_mode = FACE_MODE_DARK;
+  }
+  s_night = persist_exists(PERSIST_KEY_NIGHT) && persist_read_bool(PERSIST_KEY_NIGHT);
+  if (persist_exists(PERSIST_KEY_NIGHT_START)) {
+    s_night_start = clamp_hour(persist_read_int(PERSIST_KEY_NIGHT_START));
+  }
+  if (persist_exists(PERSIST_KEY_NIGHT_END)) {
+    s_night_end = clamp_hour(persist_read_int(PERSIST_KEY_NIGHT_END));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Lifecycle
 
 static void window_load(Window *window) {
@@ -371,6 +476,13 @@ static void window_unload(Window *window) {
 }
 
 static void init(void) {
+  init_colors();
+  load_settings();
+  // Before the window: its grid takes what is left of the heap. The settings
+  // are a few small values, and the face sends nothing.
+  app_message_register_inbox_received(inbox_received);
+  app_message_open(128, 0);
+
   s_window = window_create();
   window_set_background_color(s_window, GColorBlack);
   window_set_window_handlers(s_window, (WindowHandlers){
@@ -405,6 +517,7 @@ static void deinit(void) {
 #endif
   tick_timer_service_unsubscribe();
   app_focus_service_unsubscribe();
+  app_message_deregister_callbacks();
   window_destroy(s_window);
   dist_destroy(s_dist);
   grid_destroy(s_grid);

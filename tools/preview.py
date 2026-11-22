@@ -18,6 +18,7 @@ by the -screen versions.
 Writes:
   hours-<platform>.png   all 12 dives at :00, :10, ... :59 (rows: hours 0-11)
   platforms.png          one moment on all seven watches
+  platforms-dark.png     the same in dark mode (a setting)
   fractal.png            the raw fractal per hour and depth, without digits
   cycle-<platform>.gif   one full palette cycle at one moment (the motion)
 """
@@ -124,8 +125,9 @@ class Dist:
 
 
 # The codes render_face writes: the palette, then digit, keyline, inside, lace.
-FACE_COLORS = design.PALETTE + [design.DIGIT, design.KEYLINE, design.INSIDE, design.LACE]
-BW_LEVELS = design.bw_levels() + list(design.bw_face_levels())
+# Per look (design.MODES), as main.c's s_colors.
+FACE_COLORS = {m: design.palette(m) + list(design.face_colors(m)) for m in design.MODES}
+BW_LEVELS = {m: design.bw_levels(m) + list(design.bw_face_levels(m)) for m in design.MODES}
 
 
 def face_grid(hour, minute, w, h, shift):
@@ -161,18 +163,18 @@ def rgb(c):
     return ((c >> 16) & 255, (c >> 8) & 255, c & 255)
 
 
-def face(platform, hour, minute, phase=0, clock24=True, state=None):
+def face(platform, hour, minute, phase=0, clock24=True, state=None, mode="light"):
     """The face at a time (24-hour `hour` drives the dive), and the state to
     pass back to render other phases of the same minute. B&W watches dither
-    each code's level, as src/c/paint.c does."""
+    each code's level, as src/c/paint.c does. `mode`: the look (design.MODES)."""
     w, h, is_round, color, _, _ = PLATFORMS[platform]
     codes, state = face_codes(platform, hour, minute, phase, clock24, state)
     img = Image.new("RGB", (w, h))
     if color:
-        colors = [rgb(c) for c in FACE_COLORS]
+        colors = [rgb(c) for c in FACE_COLORS[mode]]
         img.putdata([colors[c] for c in codes])
     else:
-        img.putdata([(255, 255, 255) if BAYER[i // w & 3][i % w & 3] < BW_LEVELS[c] else (0, 0, 0)
+        img.putdata([(255, 255, 255) if BAYER[i // w & 3][i % w & 3] < BW_LEVELS[mode][c] else (0, 0, 0)
                      for i, c in enumerate(codes)])
     return (round_mask(img) if is_round else img), state
 
@@ -245,15 +247,17 @@ def main():
                               "%02d:%02d %s" % (hour, minute, design.target(hour)[0][:13])))
         save(sheet(tiles, len(minutes)), out, "hours-%s.png" % platform)
 
-    tiles = [(face(p, 21, 37)[0], "%s 21:37" % p) for p in PLATFORMS]
-    w = max(t.width for t, _ in tiles)
-    h = max(t.height for t, _ in tiles)
-    padded = []
-    for t, label in tiles:
-        canvas = Image.new("RGB", (w, h), (24, 24, 24))
-        canvas.paste(t, ((w - t.width) // 2, (h - t.height) // 2))
-        padded.append((canvas, label))
-    save(sheet(padded, 4), out, "platforms.png")
+    for mode in design.MODES:
+        name = "platforms.png" if mode == "light" else "platforms-%s.png" % mode
+        tiles = [(face(p, 21, 37, mode=mode)[0], "%s 21:37" % p) for p in PLATFORMS]
+        w = max(t.width for t, _ in tiles)
+        h = max(t.height for t, _ in tiles)
+        padded = []
+        for t, label in tiles:
+            canvas = Image.new("RGB", (w, h), (24, 24, 24))
+            canvas.paste(t, ((w - t.width) // 2, (h - t.height) // 2))
+            padded.append((canvas, label))
+        save(sheet(padded, 4), out, name)
 
     tiles = [(fractal(hour, minute), "%02d:%02d" % (hour, minute))
              for hour in range(12) for minute in minutes]

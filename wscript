@@ -47,5 +47,7 @@ def build(ctx):
     ctx.env = cached_env
 
     ctx.set_group('bundle')
-    # No phone-side JavaScript (yet): the face needs nothing from the phone.
-    ctx.pbl_bundle(binaries=binaries)
+    # Phone-side JavaScript: only the settings page (src/pkjs).
+    ctx.pbl_bundle(binaries=binaries,
+                   js=ctx.path.ant_glob(['src/pkjs/**/*.js', 'src/pkjs/**/*.json']),
+                   js_entry_file='src/pkjs/index.js')

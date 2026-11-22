@@ -10,22 +10,31 @@
 #define DEPTH_LOW_PERCENT 25
 #define DEPTH_HIGH_PERCENT 97
 
-// The palette (cyclic) and the face's other colors: GColor8 argb bytes on
-// color watches, lit pixels out of 16 on B&W ones.
+// The face's looks (the settings page's choices, in this order).
+#define FACE_MODE_LIGHT 0
+#define FACE_MODE_DARK 1
+#define FACE_MODES 2
+
+// Per look, the palette (cyclic) and the face's other colors: GColor8 argb
+// bytes on color watches, lit pixels out of 16 on B&W ones.
 #if defined(PBL_COLOR)
-static const uint8_t s_palette[PALETTE_SIZE] = {
-  0xC2, 0xC6, 0xC7, 0xCB, 0xDB, 0xDF, 0xEF, 0xFF, 0xFE, 0xFD, 0xF9, 0xF8, 0xF4, 0xE4, 0xE0, 0xE1, 0xD1, 0xD2,
+static const uint8_t s_palettes[FACE_MODES][PALETTE_SIZE] = {
+  {0xC2, 0xC6, 0xC7, 0xCB, 0xDB, 0xDF, 0xEF, 0xFF, 0xFE, 0xFD, 0xF9, 0xF8, 0xF4, 0xE4, 0xE0, 0xE1, 0xD1, 0xD2},  // light
+  {0xC1, 0xC2, 0xC6, 0xC7, 0xD7, 0xD3, 0xD2, 0xE2, 0xE1, 0xF1, 0xF0, 0xF4, 0xF8, 0xE8, 0xE4, 0xE0, 0xD0, 0xD1},  // dark
 };
-#define FACE_DIGIT 0xFF
-#define FACE_KEYLINE 0xC0
-#define FACE_INSIDE 0xC0
-#define FACE_LACE 0xF8
+// Digit, keyline, inside, lace.
+static const uint8_t s_face_colors[FACE_MODES][4] = {
+  {0xFF, 0xC0, 0xC0, 0xF8},  // light
+  {0xC0, 0xFF, 0xC0, 0xF8},  // dark
+};
 #else
-static const uint8_t s_palette[PALETTE_SIZE] = {
-  4, 5, 6, 8, 8, 10, 10, 11, 11, 10, 8, 8, 7, 5, 4, 5, 3, 4,
+static const uint8_t s_palettes[FACE_MODES][PALETTE_SIZE] = {
+  {4, 5, 6, 8, 8, 10, 10, 11, 11, 10, 8, 8, 7, 5, 4, 5, 3, 4},  // light
+  {2, 4, 5, 6, 6, 5, 4, 5, 5, 6, 6, 7, 8, 7, 5, 4, 3, 3},  // dark
 };
-#define FACE_DIGIT 16
-#define FACE_KEYLINE 0
-#define FACE_INSIDE 0
-#define FACE_LACE 8
+// Digit, keyline, inside, lace.
+static const uint8_t s_face_colors[FACE_MODES][4] = {
+  {16, 0, 0, 8},  // light
+  {0, 16, 0, 8},  // dark
+};
 #endif
