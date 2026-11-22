@@ -45,12 +45,11 @@ DARK_PALETTE = [
 DARK_DIGIT = 0x000000
 DARK_KEYLINE = 0xFFFFFF
 
-# The face's looks, in the order of the watch's FaceMode (src/c/main.c)
-# and the settings page's choices: palette, digit, keyline, inside, lace,
-# and the B&W levels the palette's lightness is scaled into.
+# The face's looks, in the order of the watch's FACE_MODE_* and the
+# settings page's choices: palette, digit, keyline, inside, lace.
 MODES = {
-    "light": (PALETTE, DIGIT, KEYLINE, INSIDE, LACE, (1, 11)),  # BW_*_LEVEL below
-    "dark": (DARK_PALETTE, DARK_DIGIT, DARK_KEYLINE, INSIDE, LACE, (1, 11)),
+    "light": (PALETTE, DIGIT, KEYLINE, INSIDE, LACE),
+    "dark": (DARK_PALETTE, DARK_DIGIT, DARK_KEYLINE, INSIDE, LACE),
 }
 
 # B&W watches show the same face, dithered: each color becomes a density of
@@ -61,7 +60,6 @@ MODES = {
 # apart on color screens; on B&W only lightness can).
 BW_MIN_LEVEL = 1
 BW_MAX_LEVEL = 11
-assert all(MODES[m][5] == (BW_MIN_LEVEL, BW_MAX_LEVEL) for m in ("light", "dark"))
 
 # Digit stroke weights on color watches, as radii in pixels of a digit 50 px
 # wide (scaled with the digit). Each pixel's radius is
@@ -122,11 +120,9 @@ def lightness(rgb):
     return luminance ** (1 / 2.2)
 
 
-def bw_level(rgb, levels=(BW_MIN_LEVEL, BW_MAX_LEVEL)):
-    """Lit pixels out of 16 for a band's color (palette or lace) on B&W:
-    its lightness scaled into `levels`."""
-    low, high = levels
-    return round(low + (high - low) * lightness(rgb))
+def bw_level(rgb):
+    """Lit pixels out of 16 for a band's color (palette or lace) on B&W."""
+    return round(BW_MIN_LEVEL + (BW_MAX_LEVEL - BW_MIN_LEVEL) * lightness(rgb))
 
 
 def palette(mode="light"):
@@ -141,14 +137,14 @@ def face_colors(mode="light"):
 def bw_levels(mode="light"):
     """B&W level of each palette entry. The levels follow lightness, so dark
     mode's palette dithers darker too."""
-    return [bw_level(c, MODES[mode][5]) for c in palette(mode)]
+    return [bw_level(c) for c in palette(mode)]
 
 
 def bw_face_levels(mode="light"):
     """B&W levels of the digit, keyline, inside and lace (as FaceColors):
     black and white are solid (0 and 16), lace dithers like the bands."""
     def level(rgb):
-        return {0x000000: 0, 0xFFFFFF: 16}.get(rgb, bw_level(rgb, MODES[mode][5]))
+        return {0x000000: 0, 0xFFFFFF: 16}.get(rgb, bw_level(rgb))
     return tuple(level(c) for c in face_colors(mode))
 
 
@@ -193,7 +189,7 @@ def _one_step(a, b):
     return sorted(steps) == [0, 0, 1]
 
 
-for _p, *_colors, _ in MODES.values():
+for _p, *_colors in MODES.values():
     assert all(is_pebble_color(c) for c in _p + _colors)
     assert len(_p) == PALETTE_SIZE and len(set(_p)) == PALETTE_SIZE
     assert all(_one_step(a, b) for a, b in zip(_p, _p[1:] + _p[:1]))
