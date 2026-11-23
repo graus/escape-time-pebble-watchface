@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "../../src/c/dive.h"
+#include "../../src/c/generated/targets.h"
 #include "../../src/c/face.h"
 #include "../../src/c/grid.h"
 
@@ -60,33 +61,120 @@ static void test_known_points(void) {
   CHECK(mandel_escape(MANDEL_FIX(0.5), 0, 100) == 5, "0.5 escapes after 5");
 }
 
-// :00 shows the whole set around the home center; deeper minutes close in
-// on the target, which stays put.
+// :00 shows the whole set, upright, around the home center; :59 is
+// (6/5)^59 deeper. The same seed is the same dive; another hour, day or
+// watch is another dive; the spin turns the view without stretching it.
+static bool same_view(const MandelView *a, const MandelView *b) {
+  // Field by field: MandelView has padding, which memcmp would compare too.
+  return a->cr == b->cr && a->ci == b->ci && a->step == b->step &&
+         a->ux == b->ux && a->uy == b->uy && a->max_iter == b->max_iter;
+}
+
+// The target an hour dives into: the one (or its mirror) that the :59 view's
+// center has closed in on. Returns false if there is none.
+static bool find_target(const MandelView *v59, double *tr, double *ti) {
+  double cr = v59->cr / (double)MANDEL_ONE, ci = v59->ci / (double)MANDEL_ONE;
+  for (int k = 0; k < DIVE_TARGETS; k++) {
+    for (int sign = -1; sign <= 1; sign += 2) {
+      double r = s_targets[k][0] / (double)MANDEL_ONE, i = sign * s_targets[k][1] / (double)MANDEL_ONE;
+      // At :59 the center is |home - target| * (5/6)^59 from the target.
+      double expected = hypot(-0.75 - r, -i) * pow(5.0 / 6, 59);
+      if (fabs(hypot(cr - r, ci - i) - expected) < 3.0 * v59->step / MANDEL_ONE) {
+        *tr = r;
+        *ti = i;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// The complex point under a (fractional) screen position, as dive_point.
+static void point_at(const MandelView *v, double dx, double dy, double *r, double *i) {
+  *r = (v->cr + dx * v->ux + dy * v->uy) / (double)MANDEL_ONE;
+  *i = (v->ci + dx * v->uy - dy * v->ux) / (double)MANDEL_ONE;
+}
+
 static void test_dive(void) {
-  MandelView v0, v59;
-  dive_view(&v0, 0, 0, 135, 146);
-  dive_view(&v59, 0, 59, 135, 146);
+  const uint32_t seed = dive_hour_seed(12345, 2026, 326, 16);
+  MandelView v0, v59, again;
+  dive_view(&v0, seed, 0, 135, 146);
+  dive_view(&v59, seed, 59, 135, 146);
+  dive_view(&again, seed, 59, 135, 146);
   CHECK(abs(v0.cr - MANDEL_FIX(-0.75)) < 2 && v0.ci == 0, "home center at :00");
+  CHECK(v0.ux == v0.step && v0.uy == 0, ":00 is upright");
   double zoom = (double)v0.step / v59.step;
   CHECK(zoom > 40000 && zoom < 55000, "zoom at :59 is (6/5)^59 = 47,000 (got %.0f)", zoom);
   CHECK(v59.step >= 32, "a pixel at :59 still spans %d units of 2^-27", v59.step);
-  // Seahorse Valley is hour 0's target; the center has converged on it.
-  CHECK(fabs(v59.cr / (double)MANDEL_ONE + 0.743643887) < 1e-4 &&
-        fabs(v59.ci / (double)MANDEL_ONE - 0.131825904) < 1e-4, "hour 0 dives into Seahorse Valley");
-  MandelView odd;
-  dive_view(&odd, 1, 59, 135, 146);
-  CHECK(odd.ci < 0, "odd hours dive into the mirror image");
-  dive_view(&odd, 13, 59, 135, 146);
-  MandelView one;
-  dive_view(&one, 1, 59, 135, 146);
-  CHECK(odd.cr == one.cr && odd.ci == one.ci, "13:00 repeats 1:00");
+  CHECK(same_view(&v59, &again), "the same seed is the same dive");
+
+  CHECK(dive_hour_seed(12345, 2026, 326, 16) != dive_hour_seed(12345, 2026, 326, 17) &&
+        dive_hour_seed(12345, 2026, 326, 16) != dive_hour_seed(12345, 2026, 327, 16) &&
+        dive_hour_seed(12345, 2026, 326, 16) != dive_hour_seed(12346, 2026, 326, 16),
+        "another hour, day or watch has another seed");
+
+  // 240 hours (ten days) of one watch: every :30 view is its own, and the
+  // seeds reach most of the targets, both ways up.
+  enum { HOURS = 240 };
+  static MandelView views[HOURS];
+  int same = 0, upper = 0;
+  for (int k = 0; k < HOURS; k++) {
+    dive_view(&views[k], dive_hour_seed(777, 2026, 300 + k / 24, k % 24), 30, 135, 146);
+    MandelView deep;
+    dive_view(&deep, dive_hour_seed(777, 2026, 300 + k / 24, k % 24), 59, 135, 146);
+    upper += deep.ci > 0;
+    for (int j = 0; j < k; j++) {
+      same += same_view(&views[j], &views[k]);
+    }
+  }
+  CHECK(same == 0, "%d of %d hours repeat another's :30 view", same, HOURS);
+  CHECK(upper > HOURS / 4 && upper < HOURS * 3 / 4, "%d of %d dives above the axis", upper, HOURS);
+
+  // The spin turns the step without changing its length (to the rounding of
+  // the sine table), and has turned by :30.
+  int turned = 0;
+  for (int k = 0; k < HOURS; k++) {
+    double len = sqrt((double)views[k].ux * views[k].ux + (double)views[k].uy * views[k].uy);
+    CHECK(fabs(len / views[k].step - 1) < 0.02, "hour %d: step %d, turned %.0f", k, views[k].step, len);
+    turned += views[k].uy != 0;
+  }
+  CHECK(turned > HOURS * 9 / 10, "%d of %d views turned by :30", turned, HOURS);
+
+  // Each dive closes in on one of the targets (or its mirror), and the
+  // target keeps its place on the screen as the view zooms and turns: the
+  // screen position it has at :00 shows it at :30 and :59 too.
+  int lost = 0, moved = 0;
+  for (int k = 0; k < 48; k++) {
+    uint32_t s = dive_hour_seed(4242, 2026, 326 + k / 24, k % 24);
+    MandelView at0, at30, at59;
+    dive_view(&at0, s, 0, 144, 168);
+    dive_view(&at30, s, 30, 144, 168);
+    dive_view(&at59, s, 59, 144, 168);
+    double tr, ti;
+    if (!find_target(&at59, &tr, &ti)) {
+      lost++;
+      continue;
+    }
+    // :00 is upright: the target's screen offset from the center.
+    double dx = (tr - at0.cr / (double)MANDEL_ONE) * MANDEL_ONE / at0.step;
+    double dy = -(ti - at0.ci / (double)MANDEL_ONE) * MANDEL_ONE / at0.step;
+    const MandelView *later[2] = {&at30, &at59};
+    for (int n = 0; n < 2; n++) {
+      double r, i;
+      point_at(later[n], dx, dy, &r, &i);
+      moved += hypot(r - tr, i - ti) > 2.0 * later[n]->step / MANDEL_ONE;
+    }
+  }
+  CHECK(lost == 0, "%d of 48 dives closed in on no target", lost);
+  CHECK(moved == 0, "%d of 96 views moved the target on the screen", moved);
 }
 
 // Every row is computed exactly once, whatever the height.
 static void test_interlace(void) {
   for (int h = 1; h <= 40; h++) {
     Grid *g = grid_create(8, h, 0, 24, (GridEncoding){6, 25, 97});
-    MandelView v = {MANDEL_FIX(3.0), 0, 1, 1};  // far outside: escapes at once, cell 0
+    // Far outside: escapes at once, cell 0.
+    MandelView v = {.cr = MANDEL_FIX(3.0), .ci = 0, .step = 1, .ux = 1, .uy = 0, .max_iter = 1};
     memset(g->cells, 0xAA, (size_t)g->w * g->h);
     grid_start(g, &v);
     int steps = 0;
@@ -110,7 +198,7 @@ static const GridEncoding PACKED = {
 static Grid *computed(int hour, int minute, int w, int h, uint8_t modulo) {
   Grid *g = grid_create(w, h, 0, modulo, PACKED);
   MandelView v;
-  dive_view(&v, hour, minute, g->w, g->h);
+  dive_view(&v, dive_hour_seed(2026, 2026, 326, hour), minute, g->w, g->h);
   grid_start(g, &v);
   while (grid_step(g)) {
   }

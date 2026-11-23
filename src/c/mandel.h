@@ -23,10 +23,12 @@
 // in a cycle (which fixed point arithmetic makes exact, so cheap to detect).
 uint16_t mandel_escape(int32_t cr, int32_t ci, uint16_t max_iter);
 
-// The view of one minute: the complex point at the window's center, the
-// distance between neighboring pixels, and the iteration budget.
+// The view of one minute: the complex point at the screen's center, the
+// distance and direction between neighbouring cells, and the iteration budget.
 typedef struct {
   int32_t cr, ci;     // center, Q4.27
-  int32_t step;       // per pixel, Q4.27
+  int32_t step;       // distance between neighbouring cells, Q4.27
+  int32_t ux, uy;     // one cell to the right, as a complex step (step,
+                      // turned by the view's angle), Q4.27
   uint16_t max_iter;
 } MandelView;

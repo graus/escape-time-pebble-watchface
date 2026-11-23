@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.0 (2026-11-23)
+
+Every hour a new dive, unique to your watch.
+
+- Each watch makes its own random seed, and each hour of each day draws
+  from it where to dive and how to turn: no two watches, days or hours share
+  a dive (they used to repeat twelve dives, twice a day, on every watch).
+- 71 targets instead of 12: Misiurewicz points found up to preperiod +
+  period 10 and each checked for a whole hour (no big black blobs, never
+  flat, no confetti deep down), dived into either way up.
+- The dive spirals: every minute the view turns a little, by the hour's
+  random spin plus a random nudge of its own.
+- Still computed on the watch, and still reproducible: a dive depends only
+  on the watch's seed, the date and the minute.
+
 ## 1.1.0 (2026-11-22)
 
 Dark mode, and the face's first settings.

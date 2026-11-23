@@ -35,15 +35,15 @@ import preview  # noqa: E402
 OUT = os.path.join(ROOT, "store")
 SHOTS = os.path.join(OUT, "screenshots")
 
-# The dive the store shows: hour 4 dives into the Northwest star M(6,1), the
-# richest all the way down. Shown on a 24-hour clock as 16:00-16:59 (same
-# dive: 12 targets repeat twice a day).
-TIMELAPSE_HOUR = 16
+# The dive the store shows: 09:00-09:59 on the previews' demo watch
+# (tools/preview.py set_watch), the richest of its day by structured detail.
+# Every watch dives its own way; this is one.
+TIMELAPSE_HOUR = 9
 TIMELAPSE_PHASE = 2        # palette steps per frame: the colors flow as it dives
 FRAME_MS = 110             # per minute: an hour in under 7 seconds
 HOLD_FIRST_MS = 900        # linger on the whole set
 HOLD_LAST_MS = 1100        # and on the deepest view
-STILL = (16, 37)           # the screenshot's moment
+STILL = (9, 37)           # the screenshot's moment
 
 # The store rejects any other size (see store/publish.sh).
 SIZES = {"aplite": (144, 168), "basalt": (144, 168), "diorite": (144, 168),

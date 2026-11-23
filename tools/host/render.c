@@ -7,6 +7,26 @@
 #include "../../src/c/face.h"
 #include "../../src/c/generated/palette.h"
 
+// The watch whose dives the previews show: its seed and the date. Hours
+// map to dives through dive_hour_seed, as on the watch.
+static uint32_t s_watch_seed = 0x5EED2026;
+static int s_year = 2026, s_yday = 326;
+
+void render_set_watch(uint32_t watch_seed, int year, int yday) {
+  s_watch_seed = watch_seed;
+  s_year = year;
+  s_yday = yday;
+}
+
+uint32_t render_hour_seed(int hour) {
+  return dive_hour_seed(s_watch_seed, s_year, s_yday, hour);
+}
+
+// The view of an hour's dive at a minute, as the watch computes it.
+static void view_at(int hour, int minute, int w, int h, MandelView *view) {
+  dive_view(view, render_hour_seed(hour), minute, w, h);
+}
+
 // Escape counts (or MANDEL_INSIDE) for every cell of a w x h view.
 void render_view(const MandelView *view, int w, int h, uint16_t *out) {
   for (int y = 0; y < h; y++) {
@@ -20,7 +40,7 @@ void render_view(const MandelView *view, int w, int h, uint16_t *out) {
 
 // The view for a time, exactly as the watch computes it.
 void render_time(int hour, int minute, int w, int h, MandelView *view, uint16_t *out) {
-  dive_view(view, hour, minute, w, h);
+  view_at(hour, minute, w, h, view);
   render_view(view, w, h, out);
 }
 
@@ -39,7 +59,7 @@ int render_face_grid(int hour, int minute, int w, int h, int shift, uint8_t *out
   Grid *grid = grid_create(w, h, shift, PALETTE_SIZE, encoding);
   if (!grid) return 0;
   MandelView view;
-  dive_view(&view, hour, minute, grid->w, grid->h);
+  view_at(hour, minute, grid->w, grid->h, &view);
   grid_start(grid, &view);
   while (grid_step(grid)) {
   }

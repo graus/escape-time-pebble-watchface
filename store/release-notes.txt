@@ -1,1 +1,1 @@
-Dark mode: black digits outlined in white over deep blues, purples and embers, all the time or only between night hours you choose. Find it in the face's settings in the Pebble app. On every Pebble, color and black-and-white.
+Every hour a new dive, unique to your watch: each watch makes its own random seed, and each hour of each day picks from 71 targets on the set's edge and spirals in with a random spin, so no two watches, days or hours share a dive. Each target was checked for a whole hour of detail.

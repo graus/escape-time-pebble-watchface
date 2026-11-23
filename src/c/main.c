@@ -83,6 +83,7 @@ enum {
   PERSIST_KEY_NIGHT,
   PERSIST_KEY_NIGHT_START,
   PERSIST_KEY_NIGHT_END,
+  PERSIST_KEY_WATCH_SEED,  // this watch's own, made once: its dives are its own
 };
 static uint8_t s_mode = FACE_MODE_LIGHT;  // the chosen look
 static bool s_night;                      // dark from s_night_start to s_night_end
@@ -101,6 +102,8 @@ static FaceFrame s_frame;
 
 static Grid *s_grid;
 static int s_hour = -1, s_minute = -1;  // the view being shown (none yet)
+static uint32_t s_watch_seed;             // see load_watch_seed
+static uint32_t s_hour_seed;              // the dive of s_hour, today
 
 static AppTimer *s_frame_timer;
 static AppTimer *s_awake_timer;
@@ -131,7 +134,7 @@ static void start_view(void) {
     return;  // no grid, or the time is not known yet
   }
   MandelView view;
-  dive_view(&view, s_hour, s_minute, s_grid->w, s_grid->h);
+  dive_view(&view, s_hour_seed, s_minute, s_grid->w, s_grid->h);
   grid_start(s_grid, &view);
   s_compute_start = now_ms();
   update_running();  // frames compute the view, even on a still face
@@ -230,7 +233,10 @@ static void update_time(struct tm *t) {
   update_layout();
 
   // The dive follows the 24-hour clock whatever the display style.
-  if (t->tm_hour != s_hour || t->tm_min != s_minute) {
+  // Each hour of each day dives anew, as only this watch does.
+  uint32_t seed = dive_hour_seed(s_watch_seed, t->tm_year + 1900, t->tm_yday, t->tm_hour);
+  if (seed != s_hour_seed || t->tm_hour != s_hour || t->tm_min != s_minute) {
+    s_hour_seed = seed;
     s_hour = t->tm_hour;
     s_minute = t->tm_min;
     start_view();
@@ -430,6 +436,22 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
   }
 }
 
+// The watch's own seed, so its dives are unlike any other watch's: made
+// once, from the moment the face first ran, and kept.
+static void load_watch_seed(void) {
+  if (persist_exists(PERSIST_KEY_WATCH_SEED)) {
+    s_watch_seed = (uint32_t)persist_read_int(PERSIST_KEY_WATCH_SEED);
+    return;
+  }
+  time_t now;
+  uint16_t ms;
+  time_ms(&now, &ms);
+  srand((uint32_t)now * 1000u + ms);  // unsigned: now * 1000 overflows int32
+  s_watch_seed = ((uint32_t)rand() << 16) ^ (uint32_t)rand() ^ (uint32_t)now * 2654435761u ^ ms;
+  persist_write_int(PERSIST_KEY_WATCH_SEED, (int32_t)s_watch_seed);
+  APP_LOG(APP_LOG_LEVEL_INFO, "a new watch seed: %08lx", (unsigned long)s_watch_seed);
+}
+
 static void load_settings(void) {
   if (persist_exists(PERSIST_KEY_MODE)) {
     int32_t mode = persist_read_int(PERSIST_KEY_MODE);
@@ -473,6 +495,7 @@ static void window_unload(Window *window) {
 static void init(void) {
   init_colors();
   load_settings();
+  load_watch_seed();
   // Before the window: its grid takes what is left of the heap. The settings
   // are a few small values, and the face sends nothing.
   app_message_register_inbox_received(inbox_received);

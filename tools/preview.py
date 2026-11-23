@@ -9,14 +9,15 @@ are the real resources, laid out as src/c/layout.c does; colors and B&W
 dither levels come from tools/design.py, as src/c/generated/palette.h does,
 and B&W faces are dithered as src/c/paint.c does. So a preview is the watch
 face, pixel for pixel, at any time of day (the emulator only shows the
-current time).
+current time). Hours map to dives as on one demo watch on one day (see
+set_watch), so the same hour always previews the same dive.
 
 Every image comes in two versions: exact Pebble colors, and `-screen`, as
 the color display shows them (muted; see tools/display.py). Judge the look
 by the -screen versions.
 
 Writes:
-  hours-<platform>.png   all 12 dives at :00, :10, ... :59 (rows: hours 0-11)
+  hours-<platform>.png   12 hours' dives at :00, :10, ... :59 (rows: hours 0-11)
   platforms.png          one moment on all seven watches
   platforms-dark.png     the same in dark mode (a setting)
   fractal.png            the raw fractal per hour and depth, without digits
@@ -57,7 +58,8 @@ INSIDE = 0xFFFF
 
 class View(ctypes.Structure):
     _fields_ = [("cr", ctypes.c_int32), ("ci", ctypes.c_int32),
-                ("step", ctypes.c_int32), ("max_iter", ctypes.c_uint16)]
+                ("step", ctypes.c_int32), ("ux", ctypes.c_int32), ("uy", ctypes.c_int32),
+                ("max_iter", ctypes.c_uint16)]
 
 
 def load_lib():
@@ -66,7 +68,8 @@ def load_lib():
                ("tools/host/render.c", "src/c/mandel.c", "src/c/dive.c",
                 "src/c/grid.c", "src/c/face.c")]
     headers = [os.path.join(ROOT, "src/c", p) for p in
-               ("generated/targets.h", "generated/palette.h", "mandel.h", "dive.h",
+               ("generated/targets.h", "generated/trig.h", "generated/palette.h",
+                "mandel.h", "dive.h",
                 "grid.h", "face.h")]
     newest = max(os.path.getmtime(p) for p in sources + headers)
     if not os.path.exists(lib_path) or os.path.getmtime(lib_path) < newest:
@@ -81,6 +84,17 @@ LIB.dist_create.argtypes = [ctypes.c_uint16, ctypes.c_uint16]
 LIB.dist_destroy.argtypes = [ctypes.c_void_p]
 LIB.dist_merge_row.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
                                ctypes.c_char_p, ctypes.c_int]
+LIB.render_set_watch.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_int]
+LIB.render_hour_seed.restype = ctypes.c_uint32
+
+
+def set_watch(seed, year=2026, yday=326):
+    """Whose dives to show: every watch makes its own seed, and each hour's
+    dive comes from it and the date (src/c/dive.c dive_hour_seed). The
+    previews default to one demo watch on one day."""
+    LIB.render_set_watch(seed, year, yday)
+
+
 LIB.render_face_grid.argtypes = [ctypes.c_int] * 5 + [ctypes.c_char_p]
 LIB.render_face.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                             ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p]
@@ -244,7 +258,7 @@ def main():
         for hour in range(12):
             for minute in minutes:
                 tiles.append((face(platform, hour, minute)[0],
-                              "%02d:%02d %s" % (hour, minute, design.target(hour)[0][:13])))
+                              "%02d:%02d" % (hour, minute)))
         save(sheet(tiles, len(minutes)), out, "hours-%s.png" % platform)
 
     for mode in design.MODES:

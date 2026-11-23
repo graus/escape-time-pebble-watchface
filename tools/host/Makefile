@@ -4,7 +4,7 @@ SRC = ../../src/c
 test: test_mandel
 	./test_mandel
 
-test_mandel: test_mandel.c $(SRC)/mandel.c $(SRC)/dive.c $(SRC)/grid.c $(SRC)/face.c $(SRC)/*.h $(SRC)/generated/targets.h
+test_mandel: test_mandel.c $(SRC)/mandel.c $(SRC)/dive.c $(SRC)/grid.c $(SRC)/face.c $(SRC)/*.h $(SRC)/generated/*.h
 	$(CC) $(CFLAGS) -o $@ test_mandel.c $(SRC)/mandel.c $(SRC)/dive.c $(SRC)/grid.c $(SRC)/face.c -lm
 
 clean:
