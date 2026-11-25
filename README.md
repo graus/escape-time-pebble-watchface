@@ -26,6 +26,9 @@ colors each point by how many steps it takes to escape.
   set, outlined in white, over a darker palette (navy, violet, plum,
   crimson, ember; no white). *Dark at night* turns it on between set hours
   (22:00-07:00 by default); the face changes on the hour.
+- **Battery saver** (a setting): never animates. Each minute's view is
+  computed unseen, in quick steps, and painted once, whole, together with
+  the new digits: one display update a minute. Taps leave the colors still.
 
 An hour on the watch, one frame per minute (09:00-09:59 on one watch, on one
 day; every frame is the watch's own rendering, and every watch dives its own

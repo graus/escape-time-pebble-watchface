@@ -1,1 +1,1 @@
-Every hour a new dive, unique to your watch: each watch makes its own random seed, and each hour of each day picks from 71 targets on the set's edge and spirals in with a random spin, so no two watches, days or hours share a dive. Each target was checked for a whole hour of detail.
+Battery saver, a new setting: the face never animates. Each minute the new view appears at once, together with the time, in a single screen update, and a flick of the wrist leaves the colors still.

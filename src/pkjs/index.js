@@ -8,7 +8,7 @@ var MODES = [
   ['Light', 'White digits outlined in black, over bright bands.'],
   ['Dark', 'Black digits outlined in white, over deep blues, purples and embers.']
 ];
-var DEFAULTS = {Mode: 0, NightDark: false, NightStart: 22, NightEnd: 7};
+var DEFAULTS = {Mode: 0, NightDark: false, NightStart: 22, NightEnd: 7, Saver: false};
 
 function load() {
   var saved = {};
@@ -72,6 +72,11 @@ function page(settings) {
     '<div class="row" id="hours"><span>From</span><select id="start">' +
     hourOptions(settings.NightStart) + '</select><span>to</span><select id="end">' +
     hourOptions(settings.NightEnd) + '</select></div></div>' +
+    '<h2>Battery</h2><div class="group">' +
+    '<label class="row"><span><b>Battery saver</b>' +
+    '<p>Never animate: each minute the new view appears at once, with the time, ' +
+    'and a tap leaves the colors still.</p></span>' +
+    '<input type="checkbox" id="saver"' + (settings.Saver ? ' checked' : '') + '></label></div>' +
     '<button id="save">Save</button>' +
     '<script>' +
     // The page hands its values back by navigating to pebblejs://close#...,
@@ -83,7 +88,8 @@ function page(settings) {
     '$("night").onchange=sync;sync();' +
     '$("save").onclick=function(){' +
     'var s={Mode:+document.querySelector("input[name=mode]:checked").value,' +
-    'NightDark:$("night").checked,NightStart:+$("start").value,NightEnd:+$("end").value};' +
+    'NightDark:$("night").checked,NightStart:+$("start").value,NightEnd:+$("end").value,' +
+    'Saver:$("saver").checked};' +
     'location.href=returnTo+encodeURIComponent(JSON.stringify(s));};' +
     '</script></body></html>';
 }
@@ -112,14 +118,16 @@ Pebble.addEventListener('webviewclosed', function(e) {
     Mode: toInt(saved.Mode, 0, MODES.length - 1, DEFAULTS.Mode),
     NightDark: !!saved.NightDark,
     NightStart: toInt(saved.NightStart, 0, 23, DEFAULTS.NightStart),
-    NightEnd: toInt(saved.NightEnd, 0, 23, DEFAULTS.NightEnd)
+    NightEnd: toInt(saved.NightEnd, 0, 23, DEFAULTS.NightEnd),
+    Saver: !!saved.Saver
   };
   localStorage.setItem('settings', JSON.stringify(settings));
   Pebble.sendAppMessage({
     Mode: settings.Mode,
     NightDark: settings.NightDark ? 1 : 0,
     NightStart: settings.NightStart,
-    NightEnd: settings.NightEnd
+    NightEnd: settings.NightEnd,
+    Saver: settings.Saver ? 1 : 0
   }, function() {
     console.log('settings sent');
   }, function() {

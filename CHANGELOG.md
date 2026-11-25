@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 (2026-11-25)
+
+Battery saver, and a plainer store description.
+
+- Battery saver (a setting): the face never animates. Each minute's view is
+  computed unseen and painted once, whole, with the new digits: one display
+  update a minute. Taps and touches leave the colors still, and the face
+  does not animate when it appears.
+- The store description is shorter and says what the face does first.
+
 ## 1.2.0 (2026-11-23)
 
 Every hour a new dive, unique to your watch.

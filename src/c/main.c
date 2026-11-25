@@ -13,6 +13,10 @@
 // and for AWAKE_MS after a tap (a flick of the wrist, or a touch on Pebble
 // Time 2 and Round 2), when the colors flow. While still, nothing runs but
 // the minute tick.
+//
+// Battery saver (a setting) never animates: a new minute's view is computed
+// unseen and painted once, whole, with the minute's digits, in one update a
+// minute; taps change nothing.
 
 #include <pebble.h>
 
@@ -29,6 +33,9 @@
 #define COMPUTE_BUDGET_MS 40
 // How long the colors flow after a tap (and after the face starts).
 #define AWAKE_MS 30000
+// In battery saver, the pause between a view's compute steps: just enough
+// for the system's events, as nothing is painted until the view is done.
+#define SAVER_YIELD_MS 10
 
 static const uint32_t s_glyph_resources[2][10] = {
   [DigitSetLarge] = {
@@ -84,10 +91,12 @@ enum {
   PERSIST_KEY_NIGHT_START,
   PERSIST_KEY_NIGHT_END,
   PERSIST_KEY_WATCH_SEED,  // this watch's own, made once: its dives are its own
+  PERSIST_KEY_SAVER,
 };
 static uint8_t s_mode = FACE_MODE_LIGHT;  // the chosen look
 static bool s_night;                      // dark from s_night_start to s_night_end
 static uint8_t s_night_start = 22, s_night_end = 7;  // hours, 0-23
+static bool s_saver;                      // battery saver: never animate
 
 static Window *s_window;
 static Layer *s_canvas;
@@ -128,6 +137,7 @@ static uint32_t now_ms(void) {
 // The fractal
 
 static void update_running(void);
+static bool computing(void);
 
 static void start_view(void) {
   if (!s_grid || s_hour < 0) {
@@ -241,7 +251,11 @@ static void update_time(struct tm *t) {
     s_minute = t->tm_min;
     start_view();
   }
-  layer_mark_dirty(s_canvas);
+  // In battery saver the digits wait for the new view (a fraction of a
+  // second), so both change in one paint.
+  if (!(s_saver && computing())) {
+    layer_mark_dirty(s_canvas);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -306,21 +320,36 @@ static bool computing(void) {
 // Frames run while the face is in front and either awake or still
 // computing the minute's view.
 static bool wants_frames(void) {
-  return s_focused && (s_awake || computing());
+  return s_focused && ((s_awake && !s_saver) || computing());
+}
+
+// Time from one frame's start to the next's (in battery saver, which
+// paints nothing in between: the pause after a step, so the view is done
+// sooner).
+static uint32_t frame_period(void) {
+  return s_saver ? SAVER_YIELD_MS : 1000 / FPS;
 }
 
 static void frame(void *context) {
   uint32_t start = now_ms();
   compute();
-  // A cell shows palette entry (count + phase): as the phase grows, each
-  // color moves to the cells with one iteration less, outward from the set.
-  s_phase = (s_phase + 1) % PALETTE_SIZE;
-  layer_mark_dirty(s_canvas);
+  if (!s_saver) {
+    // A cell shows palette entry (count + phase): as the phase grows, each
+    // color moves to the cells with one iteration less, outward from the
+    // set.
+    s_phase = (s_phase + 1) % PALETTE_SIZE;
+    layer_mark_dirty(s_canvas);
+  } else if (!computing()) {
+    layer_mark_dirty(s_canvas);  // the finished view, whole, in one paint
+  }
   // The last frame paints the finished view; after it the face stays still.
   if (wants_frames()) {
+    // Animating, frames keep the FPS pace; in battery saver each compute
+    // step (its full budget, usually) is followed by a real pause.
     uint32_t spent = now_ms() - start;
-    uint32_t period = 1000 / FPS;
-    s_frame_timer = app_timer_register(spent < period ? period - spent : 1, frame, NULL);
+    uint32_t period = frame_period();
+    uint32_t delay = s_saver ? SAVER_YIELD_MS : spent < period ? period - spent : 1;
+    s_frame_timer = app_timer_register(delay, frame, NULL);
   } else {
     s_frame_timer = NULL;
     APP_LOG(APP_LOG_LEVEL_INFO, "still");
@@ -329,7 +358,7 @@ static void frame(void *context) {
 
 static void update_running(void) {
   if (wants_frames() && !s_frame_timer) {
-    s_frame_timer = app_timer_register(1000 / FPS, frame, NULL);
+    s_frame_timer = app_timer_register(frame_period(), frame, NULL);
   } else if (!s_focused && s_frame_timer) {
     app_timer_cancel(s_frame_timer);
     s_frame_timer = NULL;
@@ -341,8 +370,11 @@ static void awake_timeout(void *context) {
   s_awake = false;  // the running frame stops itself once the view is done
 }
 
-// Sets the colors flowing for AWAKE_MS (again).
+// Sets the colors flowing for AWAKE_MS (again); not in battery saver.
 static void wake(void) {
+  if (s_saver) {
+    return;
+  }
   s_awake = true;
   if (s_awake_timer) {
     app_timer_reschedule(s_awake_timer, AWAKE_MS);
@@ -429,8 +461,16 @@ static void inbox_received(DictionaryIterator *iter, void *context) {
     s_night_end = clamp_hour(tuple_int(t));
     persist_write_int(PERSIST_KEY_NIGHT_END, s_night_end);
   }
-  APP_LOG(APP_LOG_LEVEL_INFO, "settings: mode %d, night %s %02d-%02d, showing %d", s_mode,
-          s_night ? "on" : "off", s_night_start, s_night_end, shown_mode());
+  if ((t = dict_find(iter, MESSAGE_KEY_Saver))) {
+    s_saver = tuple_int(t) != 0;
+    persist_write_bool(PERSIST_KEY_SAVER, s_saver);
+    if (s_saver) {
+      s_awake = false;  // flowing colors stop now; the running frame stops itself
+    }
+  }
+  APP_LOG(APP_LOG_LEVEL_INFO, "settings: mode %d, night %s %02d-%02d, saver %s, showing %d",
+          s_mode, s_night ? "on" : "off", s_night_start, s_night_end, s_saver ? "on" : "off",
+          shown_mode());
   if (s_canvas) {
     layer_mark_dirty(s_canvas);
   }
@@ -464,6 +504,7 @@ static void load_settings(void) {
   if (persist_exists(PERSIST_KEY_NIGHT_END)) {
     s_night_end = clamp_hour(persist_read_int(PERSIST_KEY_NIGHT_END));
   }
+  s_saver = persist_exists(PERSIST_KEY_SAVER) && persist_read_bool(PERSIST_KEY_SAVER);
 }
 
 // ---------------------------------------------------------------------------
@@ -522,7 +563,7 @@ static void init(void) {
 #if defined(PBL_TOUCH)
   touch_service_subscribe(touch_handler, NULL);
 #endif
-  wake();  // the colors flow for a while when the face appears
+  wake();  // the colors flow for a while when the face appears (not in saver)
   APP_LOG(APP_LOG_LEVEL_INFO, "started, heap free %d", (int)heap_bytes_free());
 }
 
